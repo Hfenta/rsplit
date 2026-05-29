@@ -1,0 +1,1852 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="theme-color" content="#f5a623"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="RouteSplit"/>
+<link rel="manifest" href="manifest.json"/>
+<link rel="apple-touch-icon" href="icons/icon-192.png"/>
+<link rel="apple-touch-icon" href="icons/icon-192.png"/>
+
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>RouteSplit v2.0 — Driver Dispatcher</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Space+Mono:wght@700&display=swap');
+:root{--bg:#0f1115;--panel:#171a21;--panel2:#1f232c;--line:#2a2f3a;--text:#e7ebf0;--dim:#8b93a1;--accent:#f5a623;--accent2:#4ea1ff;--good:#3ecf8e;}
+*{box-sizing:border-box;margin:0;padding:0}
+body{min-height:100vh;color:var(--text);font-family:'DM Sans',system-ui,sans-serif;
+  background:radial-gradient(1200px 600px at 80% -10%,#1a2230 0%,var(--bg) 55%);
+  padding:28px 16px 80px}
+.wrap{max-width:1100px;margin:0 auto}
+h1{font-family:'Space Mono',monospace;font-size:24px;letter-spacing:-.5px}
+.head{display:flex;align-items:center;gap:14px;margin-bottom:6px}
+.logo{background:var(--accent);border-radius:12px;padding:10px;display:flex;line-height:0}
+.sub{color:var(--dim);font-size:13px;margin-top:2px}
+/* upload */
+.drop{display:block;margin-top:22px;border:2px dashed var(--line);border-radius:16px;
+  padding:26px;text-align:center;cursor:pointer;background:var(--panel);transition:border-color .2s}
+.drop:hover{border-color:var(--accent)}
+.drop b{display:block;margin-top:8px;font-weight:500;font-size:15px}
+.drop small{color:var(--dim);font-size:12px;margin-top:4px;display:block}
+.err{margin-top:12px;color:#ff8b8b;font-size:14px;padding:10px 14px;background:#2a1515;border-radius:8px}
+/* controls */
+.ctrl{margin-top:18px;background:var(--panel);border-radius:14px;padding:18px 20px;
+  border:1px solid var(--line);display:flex;align-items:center;gap:20px;flex-wrap:wrap}
+.ctrl label{font-size:13px;color:var(--dim)}
+.stepper{display:flex;align-items:center;gap:8px}
+.sbtn{width:34px;height:34px;border-radius:8px;cursor:pointer;border:1px solid var(--line);
+  background:var(--panel2);color:var(--text);font-weight:700;font-size:18px;font-family:inherit;
+  display:flex;align-items:center;justify-content:center}
+.sbtn:hover{border-color:var(--accent);color:var(--accent)}
+.sval{min-width:42px;text-align:center;font-weight:700;font-size:20px;font-family:'Space Mono',monospace;color:var(--accent)}
+/* bar */
+.bar{display:flex;justify-content:space-between;align-items:center;margin:22px 0 14px;flex-wrap:wrap;gap:12px}
+.stats{display:flex;gap:20px;font-size:13px;color:var(--dim);flex-wrap:wrap}
+.stats span b{color:var(--text);font-weight:700}
+.expbtn{display:flex;align-items:center;gap:8px;cursor:pointer;background:var(--accent);
+  color:#0f1115;border:none;padding:10px 18px;border-radius:10px;font-weight:700;font-family:inherit;font-size:14px}
+/* driver cards */
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
+.dcard{background:var(--panel);border-radius:14px;border:1px solid var(--line);overflow:hidden}
+.dhead{padding:13px 16px;border-bottom:1px solid var(--line);
+  display:flex;justify-content:space-between;align-items:center}
+.dname-input{background:none;border:none;color:var(--text);font-weight:700;font-size:15px;
+  font-family:inherit;width:100%;outline:none;cursor:text;padding:0;min-width:80px;}
+.dname-input:hover{border-bottom:1px dashed var(--dim);}
+.dname-input:focus{border-bottom:1px solid var(--accent);}
+.dcost{font-family:'Space Mono',monospace;font-size:14px}
+.dsub{font-size:11px;color:var(--dim);margin-top:2px}
+/* trip rows */
+.trip{padding:11px 16px;border-top:1px solid #1a1e26}
+.trip:first-child{border-top:none}
+.tname{font-weight:600;font-size:14px}
+.tcost{color:var(--dim);font-size:13px}
+.trow{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.meta{display:flex;gap:8px;margin-top:5px;flex-wrap:wrap;align-items:center}
+.tag{font-size:11px;padding:2px 7px;border-radius:20px;font-weight:500;white-space:nowrap}
+.tag-time{background:#1e2535;color:var(--accent2)}
+.tag-appt{background:#1e2535;color:var(--text)}
+.tag-miles{background:#1a1e26;color:var(--dim)}
+.tag-ret{background:#0d2a1e;color:var(--good)}
+.tag-wc{background:#2a1515;color:#ff8b8b}
+.tag-chain{background:#1e2535;color:var(--accent)}
+.tag-reassign{background:#1a1a2e;color:var(--accent2)}
+.tag-last{background:#2a1f0d;color:var(--accent)}
+.tag-warn{background:#2a1515;color:#ffaa44}
+.addr{font-size:12px;color:var(--dim);margin-top:4px;line-height:1.5}
+.alabel{display:inline-block;min-width:30px;font-size:10px;font-weight:700;
+  text-transform:uppercase;letter-spacing:.4px;color:#555c6a;margin-right:4px}
+.gps{color:var(--accent2);text-decoration:none;font-size:12px;cursor:pointer;border-bottom:1px dashed #2a3a55;transition:color .15s}
+.gps:hover{color:#80caff;border-bottom-color:#80caff}
+.gps-copy{margin-left:6px;font-size:10px;color:var(--dim);cursor:pointer;user-select:none;border:none;
+  background:none;padding:2px 5px;border-radius:4px;font-family:inherit;vertical-align:middle}
+.gps-copy:hover{background:var(--panel2);color:var(--text)}
+.empty{padding:16px;color:var(--dim);font-size:13px;font-style:italic}
+/* legend */
+.legend{margin-top:18px;display:flex;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--dim)}
+.note{margin-top:14px;font-size:12px;color:var(--dim);line-height:1.7;border-top:1px solid var(--line);padding-top:14px}
+svg{display:block}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="head">
+    <div class="logo">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#0f1115" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M10 17h4V5H2v12h3"/><path d="M20 17h2v-3.34a4 4 0 0 0-1.17-2.83L19 9h-5v8h1"/>
+        <circle cx="7.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/>
+      </svg>
+    </div>
+    <div>
+      <h1>ROUTESPLIT <span style="font-size:13px;opacity:.5;font-weight:400">v2.0</span></h1>
+      <div class="sub">Medical transport dispatcher · auto-pair legs · balanced cost</div>
+    </div>
+  </div>
+
+  <label class="drop" for="file">
+    <input id="file" type="file" accept=".xlsx,.xls,.csv" style="display:none"/>
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#f5a623" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin:0 auto">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+      <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+    </svg>
+    <b id="fname">Upload your schedule file (.xlsx)</b>
+    <small>Reads your standard manifest format automatically — no column mapping needed</small>
+  </label>
+
+  <div id="err" style="display:none" class="err"></div>
+
+  <div id="ctrl" class="ctrl" style="display:none">
+    <div>
+      <label>Number of drivers</label>
+      <div class="stepper" style="margin-top:8px">
+        <button class="sbtn" id="dminus">−</button>
+        <div class="sval" id="dval">2</div>
+        <button class="sbtn" id="dplus">+</button>
+        <span style="font-size:12px;color:var(--dim);margin-left:6px">2 – 200</span>
+      </div>
+    </div>
+    <div>
+      <label>Save app</label>
+      <div style="margin-top:6px">
+        <button id="btn-save-app" onclick="downloadApp()" style="display:flex;align-items:center;gap:7px;
+          background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:9px;
+          padding:8px 14px;cursor:pointer;font-family:inherit;font-size:12px;font-weight:500;white-space:nowrap">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          <span id="save-app-label">RouteSplit.html</span>
+        </button>
+      </div>
+    </div>
+    <div style="flex:1;min-width:200px">
+      <label>Schedule date</label>
+      <div id="sdate" style="margin-top:6px;font-weight:700;color:var(--accent);font-family:'Space Mono',monospace;font-size:14px">—</div>
+    </div>
+    <div>
+      <label>Trips loaded</label>
+      <div id="tcount" style="margin-top:6px;font-weight:700;font-size:20px;font-family:'Space Mono',monospace">—</div>
+    </div>
+  </div>
+
+  <div id="resultwrap" style="display:none">
+    <div class="bar">
+      <div class="stats" id="stats"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="expbtn" id="export">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0f1115" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          Export Excel
+        </button>
+        <button class="expbtn" id="export-word" style="background:#4ea1ff">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0f1115" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+          </svg>
+          Export Word
+        </button>
+      </div>
+    </div>
+    <div class="cards" id="cards"></div>
+    <div class="legend">
+      <span class="tag tag-time">🕒 est. pickup</span>
+      <span class="tag tag-appt">📅 appt time</span>
+      <span class="tag tag-ret">↩ return leg</span>
+      <span class="tag tag-wc">📞 will call</span>
+      <span class="tag tag-chain">🔗 kept same driver</span>
+      <span class="tag tag-reassign">⇄ reassigned</span>
+      <span class="tag tag-last">› last of day</span>
+    </div>
+    <div class="note">
+      <b>Dispatching rules applied:</b><br>
+      1. Gap &lt; 30 min between legs → same driver waits and returns the member.<br>
+      2. Gap 1–2 hrs between legs (or at least 1 hr free before next pickup) → same driver keeps the return.<br>
+      3. Gap &gt; 2 hrs or Will Call → return moves to a less-loaded driver only if the original driver is busy with another pickup; otherwise the original driver keeps it.<br>
+      4. Cost and trip count balanced as evenly as possible across all drivers.<br>
+      5. Last trip of the day assigned to the same driver as the trip before it.
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ─── Version ──────────────────────────────────────────────────────────────────
+// v1.0 — Initial main release
+//        · Pair-level dispatch, fare balance, ZIP proximity, conflict-aware
+//        · Leg rules: <30min same driver, 30min-2hr same driver, >2hr/WC reassign
+//        · 2.5 min/mile, GPS links, color export, bulletproof parsing, 2-200 drivers
+//
+// v1.8 — Same appointment time → different drivers
+//        · Two or more outbounds at the exact same appt time are never assigned
+//          to the same driver (10,000 pt penalty — effectively a hard block)
+//
+// v1.9 — Unassigned section + cost-comparison swap
+//        · When all drivers conflict, compare pair costs
+//        · More expensive trip stays assigned; cheaper goes to Unassigned
+//        · Unassigned card shows reason and cost comparison
+//        · Dispatcher reviews and manually assigns cheaper conflict trips
+const APP_VERSION="2.0";
+
+
+const MIN_PER_MILE = 3;
+const SAME_DRV_GAP = 60;
+const BUFFER_MIN   = 30;
+const BUFFER_PREF  = 60;
+const MIN_OUT_GAP  = 60;  // min minutes between consecutive outbounds on same driver
+const MIN_OUT_RET_GAP = 45; // min minutes between outbound of one member and return of another
+
+// ── ZIP cluster map ────────────────────────────────────────────────────────
+// Geographic clusters for Charlotte metro ZIPs.
+// Numeric ZIP difference is NOT a reliable distance proxy — use explicit clusters.
+// Trips in the same cluster should strongly prefer the same driver.
+const ZIP_CLUSTER={
+  // East / NE Charlotte
+  '28205':'EAST','28206':'EAST','28207':'EAST','28209':'EAST',
+  '28211':'EAST','28212':'EAST','28213':'EAST','28214':'EAST',
+  '28215':'EAST','28227':'EAST','28269':'EAST',
+  // NW Charlotte / Derita / Huntersville-ish
+  '28216':'NW',
+  // North / Lake Norman
+  '28078':'NORTH','28031':'NORTH','28036':'NORTH','28027':'NORTH',
+  // South / Ballantyne / Steele Creek / Lake Wylie
+  '28273':'SOUTH','28277':'SOUTH','28278':'SOUTH','28270':'SOUTH',
+  '28226':'SOUTH','28244':'SOUTH',
+  // Southwest / Park Road
+  '28210':'SW',
+  // West / Remount
+  '28208':'WEST','28214':'WEST',
+  // Uptown / Center City
+  '28202':'UPTOWN','28203':'UPTOWN','28204':'UPTOWN','28208':'UPTOWN',
+  // Mint Hill / East suburbs  
+  '28226':'SE',
+};
+
+function zipCluster(zip){return ZIP_CLUSTER[zip]||'OTHER';}
+
+// Cluster distance: 0=same, 1=adjacent, 2=far
+const CLUSTER_ADJ={
+  'EAST':  {'EAST':0,'NW':1,'UPTOWN':1,'SE':1,'OTHER':2,'SOUTH':2,'SW':2,'WEST':2,'NORTH':2},
+  'NW':    {'NW':0,'NORTH':1,'EAST':1,'UPTOWN':1,'OTHER':2,'SOUTH':2,'SW':2,'WEST':1},
+  'NORTH': {'NORTH':0,'NW':1,'OTHER':2,'EAST':2,'SOUTH':2,'SW':2,'WEST':2,'UPTOWN':2},
+  'SOUTH': {'SOUTH':0,'SW':1,'SE':1,'OTHER':2,'EAST':2,'NW':2,'WEST':2,'NORTH':2,'UPTOWN':2},
+  'SW':    {'SW':0,'SOUTH':1,'WEST':1,'UPTOWN':1,'OTHER':2,'EAST':2,'NW':2,'NORTH':2},
+  'WEST':  {'WEST':0,'UPTOWN':1,'SW':1,'NW':1,'OTHER':2,'EAST':2,'SOUTH':2,'NORTH':2},
+  'UPTOWN':{'UPTOWN':0,'WEST':1,'EAST':1,'SW':1,'OTHER':2,'SOUTH':2,'NW':2,'NORTH':2},
+  'SE':    {'SE':0,'EAST':1,'SOUTH':1,'OTHER':2,'NW':2,'WEST':2,'NORTH':2,'SW':2,'UPTOWN':2},
+  'OTHER': {'OTHER':0},
+};
+function clusterDist(z1,z2){
+  const c1=zipCluster(z1), c2=zipCluster(z2);
+  if(c1===c2)return 0;
+  return(CLUSTER_ADJ[c1]&&CLUSTER_ADJ[c1][c2]!=null)?CLUSTER_ADJ[c1][c2]:2;
+}
+// 20-color palette cycling cleanly for up to 200 drivers
+const DCOLORS=(()=>{
+  const hues=[0,210,120,280,30,170,330,60,190,300,90,240,15,150,260,45,200,345,100,225];
+  return hues.map(h=>'hsl('+h+',78%,62%)');
+})();
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function toMinutes(v){
+  if(v==null||v==="")return null;
+  if(v instanceof Date)return v.getHours()*60+v.getMinutes();
+  if(typeof v==="number"){
+    if(v>0&&v<1)return Math.round(v*24*60);
+    if(Number.isInteger(v)&&v>=24)return Math.round((v%1)*24*60);
+    const h=Math.floor(v),mm=Math.round((v-h)*60);
+    if(h<=23&&mm<=59)return h*60+mm;
+    return Math.round((v%1)*24*60);
+  }
+  let s=String(v).trim().toLowerCase();
+  if(!s||/will\s*call|w\/c|wc\b/.test(s))return null;
+  let mer=null;
+  if(/p\.?m\.?/.test(s))mer="p";
+  else if(/a\.?m\.?/.test(s))mer="a";
+  let h=null,mm=0,m;
+  if((m=s.match(/(\d{1,2})\s*[:.]\s*(\d{2})/))){h=+m[1];mm=+m[2];}
+  else if(!mer&&(m=s.match(/(\d{3,4})(?!\d)/))){const n=m[1];h=+n.slice(0,n.length-2);mm=+n.slice(-2);}
+  else if((m=s.match(/(\d{1,2})/))){h=+m[1];}
+  if(h==null)return null;
+  if(mer==="p"&&h<12)h+=12;
+  if(mer==="a"&&h===12)h=0;
+  if(h>23||mm>59)return null;
+  return h*60+mm;
+}
+function fmtTime(x){
+  if(x==null)return"—";
+  let h=Math.floor(x/60),m=x%60,mer=h>=12?"PM":"AM",hh=h%12;
+  if(hh===0)hh=12;
+  return hh+":"+String(m).padStart(2,"0")+" "+mer;
+}
+function money(n){return"$"+(Number(n)||0).toFixed(2);}
+function joinAddr(street,city,zip){
+  const cz=[city,zip].filter(Boolean).join(", ");
+  return [street,cz].filter(Boolean).join(", ");
+}
+function isWillCall(v){return/will\s*call|w\/c|\bwc\b/i.test(String(v||""));}
+
+// ─── Fuzzy column resolver ────────────────────────────────────────────────────
+// Finds the best matching column for each logical field by trying multiple
+// possible names. Works with any file format, not just the original manifest.
+const FIELD_ALIASES={
+  FIRST:   ["member's first name","member first name","patient first name","first name","firstname","member first","fname","given name","patient first"],
+  LAST:    ["member's last name","member last name","patient last name","last name","lastname","member last","lname","surname","patient last"],
+  FULLNAME:["member name","full name","fullname","member's name","patient name","name"],
+  PHONE:   ["member's phone number","member's phone","member phone number","member phone","patient phone","phone number","mobile number","cell number"],
+  TIME:    ["time","appointment time","appt time","sched time","pickup time","scheduled time",
+            "will call"],  // new file uses "Will Call" column for the time value
+  COST:    ["trip cost","cost","fare","amount","price","trip fare","total cost","charge"],
+  MILES:   ["trip mileage","mileage","miles","distance","trip miles","trip distance"],
+  TRIPNUM: ["trip number","trip #","trip no","tripnum","trip id","booking","confirmation","trip_number"],
+  TRIPTYPE:["trip type","triptype","leg type","leg","direction","type"],
+  WILLCALL:["will call flag","willcall flag","wc flag"],  // separate flag column (original file)
+  PU_ADDR: ["pickup address","pick up address","pickup street","from address","origin address","pu address","pickup addr"],
+  PU_CITY: ["pickup city","pick up city","from city","origin city","pu city"],
+  PU_ZIP:  ["pickup zip code","pickup zip","pick up zip","from zip","origin zip","pu zip","pickup postal"],
+  DL_ADDR: ["delivery address","drop off address","dropoff address","destination address","to address","drop address","dl address"],
+  DL_CITY: ["delivery city","drop off city","dropoff city","destination city","to city","dl city"],
+  DL_ZIP:  ["delivery zip code","delivery zip","drop off zip","dropoff zip","destination zip","to zip","dl zip"],
+  DATE:    ["appointment date","appt date","date","schedule date","trip date","service date"],
+};
+
+// Build the actual resolved column map from the file's headers
+function resolveColumns(headers){
+  const lc=headers.map(h=>h.toLowerCase().trim());
+  const resolved={};
+  Object.entries(FIELD_ALIASES).forEach(([field,aliases])=>{
+    // Pass 1: exact match
+    for(const alias of aliases){
+      const idx=lc.findIndex(h=>h===alias);
+      if(idx>=0){resolved[field]=headers[idx];break;}
+    }
+    if(resolved[field]) return;
+    // Pass 2: header contains the alias as a substring
+    // e.g. "pickup zip code".includes("pickup zip") → true
+    for(const alias of aliases){
+      const idx=lc.findIndex(h=>h.includes(alias));
+      if(idx>=0){resolved[field]=headers[idx];break;}
+    }
+    if(resolved[field]) return;
+    // Pass 3: alias is an exact match for the header
+    // (alias "will call" matches header "will call" exactly — already handled in pass 1)
+    // Only do loose alias⊇header match if header is 5+ chars AND doesn't partially match another field
+    for(const alias of aliases){
+      const idx=lc.findIndex(h=>h.length>=5&&alias===h);
+      if(idx>=0){resolved[field]=headers[idx];break;}
+    }
+  });
+  return resolved;
+}
+
+function safeStr(v){return String(v==null||v===undefined?"":v).trim();}
+function safeNum(v){return Number(safeStr(v).replace(/[^0-9.\-]/g,""))||0;}
+
+function parseRows(json){
+  const headers=json.length?Object.keys(json[0]):[];
+  const COL=resolveColumns(headers);
+
+  // Case-insensitive fallback getter
+  const colMapCI={};
+  headers.forEach(h=>colMapCI[h.toLowerCase().trim()]=h);
+  function get(row,field){
+    const key=COL[field];
+    if(!key)return "";
+    if(key in row)return row[key];
+    const lk=key.toLowerCase().trim();
+    const found=colMapCI[lk];
+    return found!==undefined?row[found]:"";
+  }
+
+  // Detect if this file identifies legs by Trip Type or Trip Number suffix
+  // Trip Type: T=outbound, F=return  |  Trip Number: ends A=outbound, B=return
+  function getIsReturn(r, tripNum){
+    const tt=safeStr(get(r,"TRIPTYPE")).toUpperCase();
+    if(tt==="F")return true;
+    if(tt==="T")return false;
+    // fall back to trip number suffix — A=outbound, anything else (B,C,D...)=return
+    const leg=tripNum.slice(-1).toUpperCase();
+    if(leg==="A")return false;
+    if(leg>="B"&&leg<="Z")return true; // B, C, D, etc. are all return legs
+    // last resort: look for "return" anywhere in the type field
+    return /return|inbound|back/i.test(tt);
+  }
+
+  return json.map((r,i)=>{
+    // Member name — may not exist in all files; fall back to pickup address, then trip number
+    const first=safeStr(get(r,"FIRST"));
+    const last =safeStr(get(r,"LAST"));
+    const tripNum=safeStr(get(r,"TRIPNUM"));
+    const fullName=safeStr(get(r,"FULLNAME"));
+    const phone=safeStr(get(r,"PHONE")).replace(/\D/g,''); // digits only
+
+    // Time field — in some files the "Will Call" column holds either a time
+    // value ("12:45 PM"), "Will Call", or "Time" (also means will call)
+    const timeRaw=safeStr(get(r,"TIME"));
+    // Will Call flag — separate column in original file; in new file the
+    // time column itself contains "Will Call" or "Time"
+    const wcFlag=safeStr(get(r,"WILLCALL")).toUpperCase()==="Y";
+    const willCall=wcFlag||isWillCall(timeRaw)||/^time$/i.test(timeRaw);
+    const apptMin=willCall?null:toMinutes(timeRaw||null);
+
+    const miles  =safeNum(get(r,"MILES"));
+    const driveMin=Math.round(miles*MIN_PER_MILE);
+    const startMin=apptMin!=null?apptMin-driveMin:null;
+
+    const legCode =tripNum.slice(-1).toUpperCase();    // "A"=outbound, "B"=return
+    const tripPrefix=tripNum.slice(0,-1);
+    const isReturn=getIsReturn(r,tripNum);
+
+    const puAddr=safeStr(get(r,"PU_ADDR"));
+    const puCity=safeStr(get(r,"PU_CITY"));
+    const puZip =safeStr(get(r,"PU_ZIP"));
+    const dlAddr=safeStr(get(r,"DL_ADDR"));
+    const dlCity=safeStr(get(r,"DL_CITY"));
+    const dlZip =safeStr(get(r,"DL_ZIP"));
+
+    // Build name: prefer first+last → full-name column → pickup address → trip number
+    // Using pickup address means "7120 WALLACE RD, CHARLOTTE" instead of "M3OIHW5GJ0A"
+    const addrName=puAddr?[puAddr,puCity].filter(Boolean).join(", "):"";
+    const name=[first,last].filter(Boolean).join(" ")||fullName||addrName||tripNum||"Trip "+(i+1);
+
+    return{
+      _key:i, name, phone, timeRaw, willCall,
+      apptMin, startMin, driveMin, miles,
+      tripNum, tripPrefix, legCode, isReturn,
+      cost:safeNum(get(r,"COST")),
+      pickFull:joinAddr(puAddr,puCity,puZip),
+      dropFull:joinAddr(dlAddr,dlCity,dlZip),
+      pickZip:puZip, dropZip:dlZip,
+      puAddr,puCity,puZip,dlAddr,dlCity,dlZip,
+    };
+  }).filter(r=>r.tripNum||(r.apptMin!=null||r.willCall));
+}
+
+// ─── Pair outbound → return legs ─────────────────────────────────────────────
+function pairLegs(trips){
+  const byPrefix={};
+  trips.forEach(t=>{
+    if(!byPrefix[t.tripPrefix])byPrefix[t.tripPrefix]=[];
+    byPrefix[t.tripPrefix].push(t);
+  });
+  const pairs={}; // outbound._key -> return trip
+  const usedAsReturn=new Set();
+
+  // Pass 1: exact prefix match — same prefix, A=outbound B/C/D=return
+  Object.values(byPrefix).forEach(group=>{
+    const out=group.find(t=>!t.isReturn);
+    const rets=group.filter(t=>t.isReturn);
+    if(out&&rets.length){
+      const ret=rets[0];
+      pairs[out._key]=ret;
+      usedAsReturn.add(ret._key);
+      // If name came from address (no real name), copy outbound name to return
+      // so both legs show the same identifier (the pickup address of the outbound)
+      if(ret.name!==out.name&&!ret.name.match(/^[A-Z]+ [A-Z]+$/)){
+        ret.name=out.name;
+      }
+    }
+  });
+
+  // Pass 2: unpaired outbound → match by member name (handles mismatched prefixes)
+  trips.filter(t=>!t.isReturn&&!pairs[t._key]).forEach(out=>{
+    const cands=trips.filter(t=>
+      t.isReturn&&!usedAsReturn.has(t._key)&&t.name===out.name
+    ).sort((a,b)=>(a.apptMin??1e9)-(b.apptMin??1e9));
+    if(cands.length){pairs[out._key]=cands[0];usedAsReturn.add(cands[0]._key);}
+  });
+
+  // Pass 3: any remaining unpaired returns — try to pair by name with any outbound
+  // This handles leg C (extra return) for the same member
+  trips.filter(t=>t.isReturn&&!usedAsReturn.has(t._key)).forEach(ret=>{
+    const out=trips.find(t=>
+      !t.isReturn&&pairs[t._key]&&t.name===ret.name
+    );
+    // If the member's outbound already has a return but this is an extra leg,
+    // treat it as a standalone outbound-less return (won't crash, just displays)
+    // Mark as used so it doesn't get re-processed
+    usedAsReturn.add(ret._key);
+  });
+
+  return pairs;
+}
+
+// ─── Core dispatch ────────────────────────────────────────────────────────────
+function dispatch(trips,numDrivers){
+  const drivers=Array.from({length:numDrivers},(_,i)=>({
+    id:i, name:driverNames[i]||"Driver "+(i+1), trips:[], cost:0,
+    lastEnd:null, lastZip:null, lastDropZip:null, unitCount:0,
+  }));
+  const unassigned=[]; // trips that can't be assigned without violating rules
+
+  const pairs=pairLegs(trips);
+  const returnKeys=new Set(Object.values(pairs).filter(r=>r!=null).map(r=>r._key));
+
+  // ── Build pair-level work units ──────────────────────────────────────────
+  // Each unit = outbound trip + optional return trip, with combined fare & schedule
+  const units = trips
+    .filter(t=>t&&!t.isReturn&&!returnKeys.has(t._key)) // outbound legs only — exclude ALL returns
+    .map(t=>{
+      const ret=pairs[t._key]||null;
+      const pairFare=(t.cost||0)+(ret?ret.cost||0:0);
+      const outAppt=t.apptMin??null;
+      const retAppt=(ret&&ret.apptMin!=null)?ret.apptMin:null;
+      const gap=(outAppt!=null&&retAppt!=null)?(retAppt-outAppt):null;
+      const mustKeepReturn= !!(ret && !ret.willCall && gap!=null && gap<=SAME_DRV_GAP);
+      const baseEnd = mustKeepReturn && retAppt!=null ? retAppt
+                    : outAppt!=null ? outAppt : (t.startMin??null);
+      const freeAfter = baseEnd!=null ? baseEnd + BUFFER_MIN : null;
+      return {outbound:t, ret, pairFare, outAppt, retAppt, gap,
+              mustKeepReturn, freeAfter,
+              pickZip:t.pickZip||"", dropZip:t.dropZip||""};
+    })
+    .filter(u=>u&&u.outbound) // never include units with undefined outbound
+    .sort((a,b)=>(a.outAppt??1e9)-(b.outAppt??1e9));
+
+  // ── Assign each unit to the best driver ─────────────────────────────────
+  // Targets — recomputed live as units are assigned
+  function targets(){
+    const totalCost=units.reduce((s,u)=>s+u.pairFare,0);
+    const totalTrips=units.length; // each unit = 1 pair (counts as 2 legs but 1 dispatch decision)
+    return{
+      cost: totalCost/numDrivers,
+      trips: totalTrips/numDrivers,
+    };
+  }
+  const tgt=targets();
+
+  // ── Timing gap validation ─────────────────────────────────────────────────
+  // Rule 1: At least MIN_OUT_GAP (60 min) between consecutive outbounds on same driver
+  // Rule 2: At least MIN_OUT_RET_GAP (45 min) between an outbound of one member
+  //         and a return of a DIFFERENT member on same driver
+  function timingViolation(driver, unit){
+    const newOut=unit.outAppt;
+    const newRet=unit.retAppt;
+    const newName=unit.outbound.name;
+
+    const existingOuts=driver.trips
+      .filter(t=>!t.isReturn&&t.apptMin!=null)
+      .map(t=>({time:t.apptMin,name:t.name}));
+    const existingRets=driver.trips
+      .filter(t=>t.isReturn&&t.apptMin!=null)
+      .map(t=>({time:t.apptMin,name:t.name}));
+
+    if(newOut!=null){
+      // Rule 1: 60 min gap between this outbound and all other outbounds
+      for(const eo of existingOuts){
+        if(Math.abs(newOut-eo.time)<MIN_OUT_GAP)
+          return `Outbound gap ${Math.abs(newOut-eo.time)}min < ${MIN_OUT_GAP}min required`;
+      }
+      // Rule 2: 45 min gap between this outbound and returns of OTHER members
+      for(const er of existingRets){
+        if(er.name!==newName&&Math.abs(newOut-er.time)<MIN_OUT_RET_GAP)
+          return `Outbound/return gap ${Math.abs(newOut-er.time)}min < ${MIN_OUT_RET_GAP}min required`;
+      }
+    }
+    // Rule 2 reverse: existing outbounds of other members vs new unit's return
+    if(newRet!=null){
+      for(const eo of existingOuts){
+        if(eo.name!==newName&&Math.abs(newRet-eo.time)<MIN_OUT_RET_GAP)
+          return `Return/outbound gap ${Math.abs(newRet-eo.time)}min < ${MIN_OUT_RET_GAP}min required`;
+      }
+    }
+    return null; // no violation
+  }
+
+  function scoreDriver(driver, unit){
+    let score=0;
+
+    // 1) COST BALANCE — normalised deviation from ideal cost target (weight 100)
+    const projCost=driver.cost+unit.pairFare;
+    const costDev=Math.abs(projCost-tgt.cost)/(tgt.cost||1);
+    score += costDev * 100;
+
+    // 2) TRIP COUNT BALANCE — equal weight to cost (weight 100)
+    const projUnits=(driver.unitCount||0)+1;
+    const tripDev=Math.abs(projUnits-tgt.trips)/(tgt.trips||1);
+    score += tripDev * 100;
+
+    // 3) ZIP CLUSTER PROXIMITY — strong weight (60 pts max)
+    //    Driver's last DROP-OFF cluster vs this pickup's cluster.
+    //    Same cluster = -60 (strong preference to keep driver in their area)
+    //    Adjacent cluster = -30 (mild preference)
+    //    Far cluster = 0 (no bonus)
+    const lastDrop=driver.lastDropZip||"";
+    const nextPickup=unit.pickZip||"";
+    if(lastDrop&&nextPickup){
+      const dist=clusterDist(lastDrop,nextPickup);
+      if(dist===0)      score -= 60;  // same cluster — strong preference
+      else if(dist===1) score -= 20;  // adjacent cluster — mild preference
+      // dist===2: no bonus, driver is far away
+    }
+
+    // 4) SAME APPOINTMENT TIME CONFLICT — hard penalty
+    if(unit.outAppt!=null){
+      const conflict=driver.trips.some(t=>
+        t.apptMin!=null && t.apptMin===unit.outAppt
+      );
+      if(conflict) score += 10000;
+    }
+
+    // 5) TIMING GAP RULES — hard penalty if 60/45 min rules violated
+    if(timingViolation(driver,unit)) score += 10000;
+
+    // 6) AVAILABILITY — hard block under BUFFER_MIN, soft under BUFFER_PREF
+    const pickupStart=unit.outbound.startMin??unit.outAppt??0;
+    if(driver.lastEnd!=null){
+      const gap=pickupStart-driver.lastEnd;
+      if(gap<BUFFER_MIN)       score+=(BUFFER_MIN-gap)*50;
+      else if(gap<BUFFER_PREF) score+=(BUFFER_PREF-gap)*2;
+    }
+
+    return score;
+  }
+
+  function assignUnit(driver, unit, retExtra){
+    driver.unitCount=(driver.unitCount||0)+1;
+    assignTrip(driver, unit.outbound, {chained:false});
+    if(unit.ret) assignTrip(driver, unit.ret, retExtra||{isReturn:true});
+    closeUnit(driver, unit);
+  }
+
+  function assignTrip(driver, trip, extra){
+    driver.trips.push({...trip,...extra});
+    driver.cost += trip.cost||0;
+    const end=trip.apptMin??trip.startMin;
+    if(end!=null&&(driver.lastEnd==null||end>driver.lastEnd)) driver.lastEnd=end;
+    // lastDropZip = where driver physically is after this trip (the delivery ZIP)
+    if(trip.dropZip) driver.lastDropZip=trip.dropZip;
+    if(trip.pickZip) driver.lastZip=trip.pickZip;
+  }
+
+  function closeUnit(driver, unit){
+    if(unit.freeAfter!=null&&(driver.lastEnd==null||unit.freeAfter>driver.lastEnd))
+      driver.lastEnd=unit.freeAfter;
+  }
+
+  // unitCount and lastDropZip initialised in driver creation above
+
+  for(const unit of units){
+    // Check if ALL drivers have a conflict (score ≥ 10000) for this unit
+    const scores=drivers.map(d=>scoreDriver(d,unit));
+    const allConflicted=scores.every(s=>s>=10000);
+
+    if(allConflicted){
+      // Find the best reason across all drivers
+      const reasons=drivers.map(d=>timingViolation(d,unit)).filter(Boolean);
+      const reason=reasons[0]||"Time conflict with all drivers";
+      // Compare cost with conflicting trip to decide swap vs unassign
+
+      // Find which assigned trip(s) conflict with this unit's appt time
+      let swapped=false;
+      if(unit.outAppt!=null){
+        for(const driver of drivers){
+          // Find the conflicting trip on this driver
+          const conflictTrip=driver.trips.find(t=>
+            !t.isReturn && t.apptMin!=null && t.apptMin===unit.outAppt
+          );
+          if(!conflictTrip) continue;
+
+          // Find the full unit of the conflicting trip
+          const conflictUnit=units.find(u=>u.outbound._key===conflictTrip._key);
+          const conflictCost=conflictUnit?conflictUnit.pairFare:(conflictTrip.cost||0);
+
+          // If the new unit is MORE expensive than the one already assigned,
+          // swap: move the cheaper conflict to Unassigned, assign the new unit here
+          if(unit.pairFare>conflictCost){
+            // Remove conflicting trip(s) from this driver
+            const conflictRetKey=conflictUnit&&conflictUnit.ret?conflictUnit.ret._key:null;
+            const removedTrips=driver.trips.filter(t=>
+              t._key===conflictTrip._key||(conflictRetKey&&t._key===conflictRetKey)
+            );
+            driver.trips=driver.trips.filter(t=>
+              t._key!==conflictTrip._key&&!(conflictRetKey&&t._key===conflictRetKey)
+            );
+            removedTrips.forEach(t=>{driver.cost-=t.cost||0;});
+            driver.unitCount=Math.max(0,(driver.unitCount||1)-1);
+
+            // Move cheaper conflict to Unassigned
+            removedTrips.forEach(t=>{
+              unassigned.push({...t,
+                unassignedReason:`Replaced by higher-cost trip ($${unit.pairFare.toFixed(2)} vs $${conflictCost.toFixed(2)})`
+              });
+            });
+
+            // Assign the new (more expensive) unit to this driver
+            assignTrip(driver, unit.outbound, {chained:false});
+            driver.unitCount=(driver.unitCount||0)+1;
+            if(unit.ret){
+              const ret=unit.ret, gap=unit.gap;
+              if(ret.willCall||( gap!=null&&gap<=SAME_DRV_GAP)){
+                assignTrip(driver, ret, {isReturn:true, keptRule:ret.willCall?"willcall":"short",
+                  keptTag:ret.willCall?"will call":`${gap}min wait`});
+              } else {
+                assignTrip(driver, ret, {isReturn:true, keptRule:"kept", keptTag:"kept"});
+              }
+            }
+            closeUnit(driver, unit);
+            swapped=true;
+            break;
+          }
+          // If new unit is CHEAPER or equal, it goes to Unassigned — existing more expensive trip stays
+          break;
+        }
+      }
+
+      if(!swapped){
+        // New unit is cheaper (or equal) — goes to Unassigned, existing trip stays
+        unassigned.push({...unit.outbound,
+          unassignedReason:"Time conflict — lower cost trip unassigned"
+        });
+        if(unit.ret) unassigned.push({...unit.ret, isReturn:true,
+          unassignedReason:"Outbound unassigned"
+        });
+      }
+      continue;
+    }
+
+    // Pick the best driver (lowest score), ignoring any with hard conflict (≥10000)
+    const eligibleDrivers=drivers.filter((_,i)=>scores[i]<10000);
+    const poolToUse=eligibleDrivers.length>0?eligibleDrivers:drivers; // fallback if all blocked
+    const chosen=poolToUse.reduce((best,d)=>
+      scores[drivers.indexOf(d)]<scores[drivers.indexOf(best)]?d:best, poolToUse[0]);
+
+    assignTrip(chosen, unit.outbound, {chained:false});
+
+    if(!unit.ret){ closeUnit(chosen,unit); chosen.unitCount++; continue; }
+
+    const ret=unit.ret;
+    const gap=unit.gap;
+
+    // ── Will Call → ALWAYS same driver ──────────────────────────────────
+    if(ret.willCall){
+      assignTrip(chosen, ret, {isReturn:true, keptRule:"willcall", keptTag:"will call"});
+      closeUnit(chosen, unit); chosen.unitCount++;
+      continue;
+    }
+
+    // ── Gap ≤ 60 min → same driver keeps both legs ───────────────────────
+    if(gap!=null && gap<=SAME_DRV_GAP){
+      const h=Math.floor(gap/60), m=gap%60;
+      const label=h>0?`${h}h${m>0?m+"m":""} wait`:`${m}min wait`;
+      assignTrip(chosen, ret, {isReturn:true, keptRule:"short", keptTag:label});
+      closeUnit(chosen, unit); chosen.unitCount++;
+      continue;
+    }
+
+    // ── Gap > 60 min, fixed time → keep unless original driver is busy ───
+    const rt=ret.apptMin;
+    const others=drivers.filter(d=>d.id!==chosen.id);
+    const origBusy=chosen.lastEnd!=null&&rt!=null&&chosen.lastEnd>rt;
+    const freeOther=others.find(d=>d.lastEnd==null||rt==null||d.lastEnd<=rt);
+
+    if(origBusy&&freeOther){
+      const alt=others
+        .filter(d=>d.lastEnd==null||rt==null||d.lastEnd<=rt)
+        .reduce((b,d)=>d.cost<b.cost?d:b);
+      assignTrip(alt, ret, {isReturn:true, keptRule:"reassigned", keptTag:"reassigned"});
+    } else {
+      const h=Math.floor((gap||0)/60), m=(gap||0)%60;
+      const label=h>0?`${h}h${m>0?m+"m":""} gap`:`${m}min gap`;
+      assignTrip(chosen, ret, {isReturn:true, keptRule:"kept", keptTag:label});
+    }
+    closeUnit(chosen, unit); chosen.unitCount++;
+  }
+
+  // ── POST-ASSIGNMENT BALANCE SWAP+MOVE PASS ───────────────────────────────
+  // After greedy assignment, try swapping whole units between drivers to
+  // improve both cost AND trip count balance simultaneously.
+  // Only swap outbound+return pairs (never split a leg-locked pair).
+  // Run multiple rounds until no improvement found.
+  const totalCost=drivers.reduce((s,d)=>s+d.cost,0);
+  const totalUnits=drivers.reduce((s,d)=>s+d.unitCount,0);
+  const tgtCost=totalCost/numDrivers;
+  const tgtUnits=totalUnits/numDrivers;
+
+  // Build a list of swappable units per driver (outbound + its return if kept)
+  // Never include trips that are in the unassigned list
+  const unassignedKeys=new Set(unassigned.map(t=>t._key));
+  function getSwappableUnits(driver){
+    const retKeys=new Set(Object.values(pairs).map(r=>r&&r._key).filter(k=>k!=null));
+    const outbounds=driver.trips.filter(t=>t&&!t.isReturn&&!retKeys.has(t._key)&&!unassignedKeys.has(t._key));
+    return outbounds.map(out=>{
+      const ret=driver.trips.find(t=>t&&t.isReturn&&pairs[out._key]&&t._key===pairs[out._key]._key)||null;
+      return{out,ret,cost:(out.cost||0)+(ret?ret.cost:0)};
+    }).filter(u=>u.out); // safety: never return units with undefined out
+  }
+
+  // ZIP cohesion helper — count same/adjacent cluster pairs within a set of units
+  function cohesion(swappableUnits){
+    let c=0;
+    const valid=swappableUnits.filter(u=>u&&u.out);
+    for(let p=0;p<valid.length;p++)
+      for(let q=p+1;q<valid.length;q++)
+        if(clusterDist(valid[p].out.pickZip||"",valid[q].out.pickZip||"")<2) c++;
+    return c;
+  }
+
+  // Check if adding a unit to a driver would create a same-time conflict
+  function wouldConflict(driver, unit, excludeKeys=new Set()){
+    const unitTimes=new Set();
+    if(unit.out&&unit.out.apptMin!=null) unitTimes.add(unit.out.apptMin);
+    if(unit.ret&&unit.ret.apptMin!=null) unitTimes.add(unit.ret.apptMin);
+    // Same-time check
+    if(unitTimes.size&&driver.trips.some(t=>
+      !excludeKeys.has(t._key)&&t.apptMin!=null&&unitTimes.has(t.apptMin)
+    )) return true;
+    // Timing gap check on a temp driver view (excluding the removed keys)
+    const tempDriver={trips:driver.trips.filter(t=>!excludeKeys.has(t._key))};
+    if(timingViolation(tempDriver,{
+      outAppt:unit.out?unit.out.apptMin:null,
+      retAppt:unit.ret?unit.ret.apptMin:null,
+      outbound:{name:unit.out?unit.out.name:''},
+    })) return true;
+    return false;
+  }
+
+  let improved=true;
+  let swapRounds=0;
+  while(improved&&swapRounds<15){
+    improved=false; swapRounds++;
+    outer:
+    for(let i=0;i<drivers.length;i++){
+      for(let j=i+1;j<drivers.length;j++){
+        const di=drivers[i], dj=drivers[j];
+        const ui=getSwappableUnits(di);
+        const uj=getSwappableUnits(dj);
+
+        // ── Try MOVES: transfer one unit from overloaded to underloaded driver ──
+        const pairs_move=[
+          ...ui.map(a=>({type:'move',from:di,to:dj,unit:a})),
+          ...uj.map(b=>({type:'move',from:dj,to:di,unit:b})),
+        ];
+        for(const mv of pairs_move){
+          const {from,to,unit:u}=mv;
+          // Skip if move would create a time conflict on destination driver
+          if(wouldConflict(to,u)) continue;
+          const fromNew={cost:from.cost-u.cost,unitCount:from.unitCount-1};
+          const toNew  ={cost:to.cost  +u.cost,unitCount:to.unitCount  +1};
+          const fromUnitsAfter=getSwappableUnits(from).filter(x=>x&&x.out&&x.out._key!==u.out._key);
+          const toUnitsAfter  =getSwappableUnits(to).concat([u]);
+          const cohBefore=cohesion(getSwappableUnits(from))+cohesion(getSwappableUnits(to));
+          const cohAfter =cohesion(fromUnitsAfter)+cohesion(toUnitsAfter);
+          const newScore=
+            Math.abs(fromNew.cost-tgtCost)/(tgtCost||1)+
+            Math.abs(toNew.cost  -tgtCost)/(tgtCost||1)+
+            Math.abs(fromNew.unitCount-tgtUnits)/(tgtUnits||1)+
+            Math.abs(toNew.unitCount  -tgtUnits)/(tgtUnits||1)
+            -(cohAfter*0.15);
+          const oldScore=
+            Math.abs(from.cost-tgtCost)/(tgtCost||1)+
+            Math.abs(to.cost  -tgtCost)/(tgtCost||1)+
+            Math.abs(from.unitCount-tgtUnits)/(tgtUnits||1)+
+            Math.abs(to.unitCount  -tgtUnits)/(tgtUnits||1)
+            -(cohBefore*0.15);
+          if(newScore<oldScore-0.001){
+            const moveKeys=new Set([u.out._key, u.ret?u.ret._key:-1]);
+            const moveTrips=from.trips.filter(t=>moveKeys.has(t._key));
+            from.trips=from.trips.filter(t=>!moveKeys.has(t._key));
+            to.trips.push(...moveTrips);
+            from.cost=fromNew.cost; to.cost=toNew.cost;
+            from.unitCount=fromNew.unitCount; to.unitCount=toNew.unitCount;
+            improved=true; break outer;
+          }
+        }
+
+        // ── Try SWAPS: exchange one unit between drivers ─────────────────────
+        for(const a of ui){
+          for(const b of uj){
+            // Skip if swap would create time conflicts on either driver
+            // di loses a, gains b — check b doesn't conflict with di's remaining trips
+            // dj loses b, gains a — check a doesn't conflict with dj's remaining trips
+            const aKeys=new Set([a.out._key, a.ret?a.ret._key:-1]);
+            const bKeys=new Set([b.out._key, b.ret?b.ret._key:-1]);
+            if(wouldConflict(di,b,aKeys)) continue;
+            if(wouldConflict(dj,a,bKeys)) continue;
+            // simulate swap: di loses a gains b, dj loses b gains a
+            const diNew={cost:di.cost-a.cost+b.cost, unitCount:di.unitCount};
+            const djNew={cost:dj.cost-b.cost+a.cost, unitCount:dj.unitCount};
+            const diUnitsAfter=getSwappableUnits(di).filter(u=>u&&u.out&&u.out._key!==a.out._key).concat([b]);
+            const djUnitsAfter=getSwappableUnits(dj).filter(u=>u&&u.out&&u.out._key!==b.out._key).concat([a]);
+            const cohBefore=cohesion(getSwappableUnits(di))+cohesion(getSwappableUnits(dj));
+            const cohAfter=cohesion(diUnitsAfter)+cohesion(djUnitsAfter);
+
+            const newImb=
+              Math.abs(diNew.cost-tgtCost)/(tgtCost||1)+
+              Math.abs(djNew.cost-tgtCost)/(tgtCost||1)+
+              Math.abs(diNew.unitCount-tgtUnits)/(tgtUnits||1)+
+              Math.abs(djNew.unitCount-tgtUnits)/(tgtUnits||1);
+            const oldImb=
+              Math.abs(di.cost-tgtCost)/(tgtCost||1)+
+              Math.abs(dj.cost-tgtCost)/(tgtCost||1)+
+              Math.abs(di.unitCount-tgtUnits)/(tgtUnits||1)+
+              Math.abs(dj.unitCount-tgtUnits)/(tgtUnits||1);
+
+            // Accept swap if it improves combined score of imbalance + ZIP cohesion
+            // ZIP cohesion weighted at 0.15 per extra same-cluster pair
+            const newScore=newImb - (cohAfter*0.15);
+            const oldScore=oldImb - (cohBefore*0.15);
+            if(newScore<oldScore-0.001){
+              // Do the swap — move a's trips from di to dj and b's trips from dj to di
+              const aKeys=new Set([a.out._key,a.ret?a.ret._key:-1]);
+              const bKeys=new Set([b.out._key,b.ret?b.ret._key:-1]);
+              const aTrips=di.trips.filter(t=>aKeys.has(t._key));
+              const bTrips=dj.trips.filter(t=>bKeys.has(t._key));
+              di.trips=di.trips.filter(t=>!aKeys.has(t._key));
+              dj.trips=dj.trips.filter(t=>!bKeys.has(t._key));
+              di.trips.push(...bTrips); dj.trips.push(...aTrips);
+              di.cost=di.cost-a.cost+b.cost;
+              dj.cost=dj.cost-b.cost+a.cost;
+              improved=true; break outer;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // ── Per-driver last outbound rule ─────────────────────────────────────
+  // For each driver: find their last outbound of the day.
+  // That member's return MUST be done by the same driver — move it if needed.
+  drivers.forEach(driver=>{
+    // Find this driver's last outbound by start time
+    const myOutbounds=driver.trips
+      .filter(t=>!t.isReturn)
+      .sort((a,b)=>(a.startMin??1e9)-(b.startMin??1e9));
+    if(!myOutbounds.length) return;
+
+    const lastOut=myOutbounds[myOutbounds.length-1];
+    const pairedRet=pairs[lastOut._key]; // the return trip object
+    if(!pairedRet) return; // no return for this member, nothing to do
+
+    // Check which driver currently has the return
+    const retDriver=drivers.find(d=>d.trips.some(t=>t._key===pairedRet._key));
+    if(!retDriver||retDriver.id===driver.id) return; // already on correct driver
+
+    // Move the return from retDriver to this driver
+    const retTrip=retDriver.trips.find(t=>t._key===pairedRet._key);
+    retDriver.trips=retDriver.trips.filter(t=>t._key!==pairedRet._key);
+    retDriver.cost-=retTrip.cost||0;
+    driver.trips.push({...retTrip,forcedLast:true});
+    driver.cost+=retTrip.cost||0;
+  });
+
+  // ── Sort each driver's trips: appointment time primary, ZIP proximity tiebreak ──
+  drivers.forEach(d=>{
+    if(!d.trips||d.trips.length===0) return; // nothing to sort
+    try{
+      // Build leg-pair blocks sorted by appointment time ascending
+      const allByTime=[...d.trips].sort((a,b)=>(a.apptMin??a.startMin??1e9)-(b.apptMin??b.startMin??1e9));
+      const usedKeys=new Set();
+      const blocks=[];
+      for(const t of allByTime){
+        if(usedKeys.has(t._key)) continue;
+        if(t.isReturn){
+          blocks.push([t]);
+          usedKeys.add(t._key);
+        } else {
+          const retTrip=d.trips.find(r=>r.isReturn&&pairs[t._key]&&r._key===pairs[t._key]._key);
+          const block=retTrip?[t,retTrip]:[t];
+          block.forEach(x=>usedKeys.add(x._key));
+          blocks.push(block);
+        }
+      }
+
+      // Safety: if blocks is empty or all trips are unaccounted for, skip sort
+      if(blocks.length===0||blocks.flat().length===0) return;
+      if(blocks.length===1){d.trips=blocks.flat();return;}
+
+      // Sort blocks by outbound appointment time (primary).
+      const TIE_WINDOW=60;
+      const ordered=[];
+      const remaining=new Set(blocks.map((_,i)=>i));
+      let lastZip="";
+
+      while(remaining.size>0){
+        let earliest=Infinity;
+        for(const i of remaining){
+          const t=blocks[i][0].apptMin??blocks[i][0].startMin??Infinity;
+          if(t<earliest) earliest=t;
+        }
+        const candidates=[...remaining].filter(i=>{
+          const t=blocks[i][0].apptMin??blocks[i][0].startMin??Infinity;
+          return t-earliest<=TIE_WINDOW;
+        });
+        let bestIdx=candidates[0];
+        if(candidates.length>1&&lastZip){
+          let bestDist=Infinity;
+          for(const i of candidates){
+            const dist=clusterDist(lastZip, blocks[i][0].pickZip||"");
+            if(dist<bestDist){bestDist=dist;bestIdx=i;}
+          }
+        }
+        ordered.push(blocks[bestIdx]);
+        const blk=blocks[bestIdx];
+        const lastTrip=blk[blk.length-1];
+        lastZip=lastTrip.dropZip||lastTrip.pickZip||"";
+        remaining.delete(bestIdx);
+      }
+
+      const sorted=ordered.flat();
+      // Only write back if we got at least as many trips as before
+      if(sorted.length>0) d.trips=sorted;
+    }catch(e){
+      console.warn('Sort failed for driver',d.name,e.message);
+      // Leave d.trips unchanged
+    }
+  });
+
+  return {drivers, unassigned};
+}
+
+// ─── UI ───────────────────────────────────────────────────────────────────────
+const $=id=>document.getElementById(id);
+let allTrips=null, numDrivers=2, lastResult=null, schedDate="";
+// Driver names — persists across re-renders so edits survive file reload
+let driverNames=Array.from({length:200},(_,i)=>"Driver "+(i+1));
+
+function showErr(m){const e=$("err");if(m){e.textContent=m;e.style.display="block";}else e.style.display="none";}
+
+$("file").addEventListener("change",e=>{const f=e.target.files[0];if(f)readFile(f);});
+
+function readFile(file){
+  showErr(null);
+  const r=new FileReader();
+  r.onload=ev=>{
+    try{
+      const wb=XLSX.read(new Uint8Array(ev.target.result),{type:"array",cellDates:false});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const json=XLSX.utils.sheet_to_json(ws,{defval:""});
+      if(!json.length){showErr("The file looks empty — check that it has a header row and data.");return;}
+
+      // Resolve columns from this file's actual headers (fuzzy match)
+      const headers=Object.keys(json[0]);
+      const resolved=resolveColumns(headers);
+
+      // Only block if we can't find the absolute minimum: a name and a time
+      const hasName=!!(resolved.FIRST||resolved.LAST);
+      const hasTime=!!resolved.TIME;
+      if(!hasName&&!hasTime){
+        // Show what we found to help the user understand
+        showErr("Could not find member name or time columns in this file. Headers found: "+headers.slice(0,8).join(", ")+(headers.length>8?" …":""));
+        return;
+      }
+
+      allTrips=parseRows(json);
+      $("fname").textContent=file.name;
+
+      // Show schedule date if found
+      const dateKey=resolved.DATE;
+      const dateVal=dateKey?json[0][dateKey]:"";
+      $("sdate").textContent=dateVal?String(dateVal):"—";
+      schedDate=dateVal?String(dateVal).replace(/[\/\\:*?"<>|]/g,"-").trim():"";
+      $("tcount").textContent=allTrips.length;
+
+      // Soft warning if some optional columns weren't found
+      const missing=["COST","MILES","TRIPNUM","PU_ADDR","DL_ADDR"].filter(f=>!resolved[f]);
+      if(missing.length){
+        const labels={COST:"cost",MILES:"mileage",TRIPNUM:"trip number",PU_ADDR:"pickup address",DL_ADDR:"delivery address"};
+        showErr("⚠ Some columns not found ("+missing.map(f=>labels[f]).join(", ")+") — those fields will be blank. Dispatching will still work.");
+        $("err").style.color="#ffaa44"; // warning, not error
+      }
+
+      $("ctrl").style.display="flex";
+      render();
+    }catch(err){showErr("Couldn't read the file: "+err.message);}
+  };
+  r.readAsArrayBuffer(file);
+}
+
+// driver stepper
+$("dminus").addEventListener("click",()=>{numDrivers=Math.max(2,numDrivers-1);$("dval").textContent=numDrivers;render();});
+$("dplus").addEventListener("click",()=>{numDrivers=Math.min(200,numDrivers+1);$("dval").textContent=numDrivers;render();});
+
+function render(){
+  if(!allTrips){$("resultwrap").style.display="none";return;}
+  let res;
+  try{
+    res=dispatch(allTrips,numDrivers);
+  }catch(err){
+    showErr("Dispatch error: "+err.message+" — Please share this file so the bug can be fixed. Stack: "+err.stack.split('\n').slice(0,3).join(' | '));
+    console.error("Full dispatch error:",err);
+    console.error("allTrips sample:",JSON.stringify(allTrips.slice(0,3)));
+    return;
+  }
+  const {drivers,unassigned}=res;
+  drivers.forEach(d=>{if(!Array.isArray(d.trips))d.trips=[];});
+  lastResult=res;
+  const totalCost=drivers.reduce((s,d)=>s+d.cost,0);
+  const totalTrips=drivers.reduce((s,d)=>s+d.trips.length,0);
+  const target=totalCost/numDrivers;
+
+  $("stats").innerHTML=
+    `<span><b>${totalTrips}</b> trips</span>`+
+    `<span><b>${money(totalCost)}</b> total</span>`+
+    `<span><b>${money(target)}</b> target / driver</span>`+
+    (unassigned.length?`<span style="color:#ff8b8b"><b>${unassigned.length}</b> unassigned ⚠</span>`:"");
+
+  $("cards").innerHTML=drivers.map((d,di)=>{
+    const c=DCOLORS[di%DCOLORS.length];
+    const diff=d.cost-target;
+    const diffStr=(diff>=0?"+":"")+money(diff);
+    const tripRows=d.trips.length?d.trips.map(t=>{
+      const pickTime=t.startMin!=null?fmtTime(t.startMin):(t.willCall?"Will Call":"—");
+      const apptTime=t.willCall?"Will Call":(t.apptMin!=null?fmtTime(t.apptMin):"—");
+      // tags
+      let tags="";
+      tags+=`<span class="tag tag-time">🕒 ${pickTime}</span>`;
+      tags+=`<span class="tag tag-appt">📅 ${apptTime}</span>`;
+      if(t.miles)tags+=`<span class="tag tag-miles">${t.miles}mi · ${t.driveMin}min</span>`;
+      if(t.isReturn&&t.keptRule==="reassigned")tags+=`<span class="tag tag-reassign">⇄ reassigned</span>`;
+      else if(t.isReturn)tags+=`<span class="tag tag-ret">↩ return · ${t.keptTag||""}</span>`;
+      if(t.willCall)tags+=`<span class="tag tag-wc">📞 will call</span>`;
+      if(t.forcedLast)tags+=`<span class="tag tag-last">› last of day</span>`;
+      return`<div class="trip">
+        <div class="trow"><span class="tname">${t.name}</span><span class="tcost">${money(t.cost)}</span></div>
+        <div class="meta">${tags}</div>
+        ${t.pickFull?`<div class="addr"><span class="alabel">From</span>${addrLink(t.pickFull)}</div>`:""}
+        ${t.dropFull?`<div class="addr"><span class="alabel">To</span>${addrLink(t.dropFull)}</div>`:""}
+      </div>`;
+    }).join(""):`<div class="empty">No trips assigned</div>`;
+
+    return`<div class="dcard">
+      <div class="dhead" style="border-left:4px solid ${c}">
+        <div style="flex:1;min-width:0">
+          <input class="dname-input" value="${d.name.replace(/"/g,'&quot;')}"
+            data-di="${di}"
+            onchange="driverNames[+this.dataset.di]=this.value.trim()||'Driver '+(+this.dataset.di+1);lastResult&&lastResult.drivers&&(lastResult.drivers[+this.dataset.di].name=driverNames[+this.dataset.di])"
+            title="Click to rename this driver"
+            placeholder="Driver ${di+1}"/>
+          <div class="dsub">${d.trips.length} trips</div>
+        </div>
+        <div style="text-align:right">
+          <div class="dcost" style="color:${c}">${money(d.cost)}</div>
+          <div class="dsub" style="color:${diff>0?"#ffaa44":diff<-1?"#ff7d7d":"var(--good)"}">${diffStr} vs target</div>
+        </div>
+      </div>
+      <div>${tripRows}</div>
+    </div>`;
+  }).join("");
+
+  // ── Unassigned card ──
+  if(unassigned.length){
+    const uRows=unassigned.map(t=>{
+      const pickTime=t.startMin!=null?fmtTime(t.startMin):(t.willCall?"Will Call":"—");
+      const apptTime=t.willCall?"Will Call":(t.apptMin!=null?fmtTime(t.apptMin):"—");
+      return`<div class="trip" style="border-left:3px solid #ff8b8b">
+        <div class="trow"><span class="tname">${t.name}</span><span class="tcost">${money(t.cost)}</span></div>
+        <div class="meta">
+          <span class="tag tag-time">🕒 ${pickTime}</span>
+          <span class="tag tag-appt">📅 ${apptTime}</span>
+          ${t.miles?`<span class="tag tag-miles">${t.miles}mi · ${t.driveMin}min</span>`:""}
+          ${t.isReturn?`<span class="tag tag-ret">↩ return</span>`:""}
+          ${t.willCall?`<span class="tag tag-wc">📞 will call</span>`:""}
+          <span class="tag" style="background:#2a1515;color:#ff8b8b">⚠ ${t.unassignedReason||"unassigned"}</span>
+        </div>
+        ${t.pickFull?`<div class="addr"><span class="alabel">From</span>${addrLink(t.pickFull)}</div>`:""}
+        ${t.dropFull?`<div class="addr"><span class="alabel">To</span>${addrLink(t.dropFull)}</div>`:""}
+      </div>`;
+    }).join("");
+    const uCost=unassigned.reduce((s,t)=>s+(t.cost||0),0);
+    $("cards").innerHTML+=`<div class="dcard" style="grid-column:1/-1;border-color:#ff4444">
+      <div class="dhead" style="border-left:4px solid #ff4444;background:#1a0a0a">
+        <div>
+          <div class="dname" style="color:#ff8b8b">⚠ Unassigned — Requires Manual Dispatch</div>
+          <div class="dsub" style="color:#ff8b8b">${unassigned.length} trip${unassigned.length>1?"s":""} could not be assigned without violating rules</div>
+        </div>
+        <div class="dcost" style="color:#ff8b8b">${money(uCost)}</div>
+      </div>
+      <div>${uRows}</div>
+    </div>`;
+  }
+
+  $("resultwrap").style.display="block";
+}
+
+// ─── Download app with versioned filename ─────────────────────────────────────
+function downloadApp(){
+  const src=document.documentElement.outerHTML;
+  const blob=new Blob(['<!DOCTYPE html>\n'+src],{type:'text/html'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download=`RouteSplit_v${APP_VERSION}.html`;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url),2000);
+}
+// Set the button label with the real version number
+window.addEventListener('DOMContentLoaded',()=>{
+  const lbl=document.getElementById('save-app-label');
+  if(lbl) lbl.textContent=`RouteSplit_v${APP_VERSION}.html`;
+});
+
+// ─── Address GPS link helper ──────────────────────────────────────────────────
+function addrLink(addr){
+  if(!addr)return"";
+  const enc=encodeURIComponent(addr);
+  // Opens in Google Maps on desktop, native Maps app on mobile
+  const url=`https://www.google.com/maps/dir/?api=1&destination=${enc}`;
+  const id="a"+Math.random().toString(36).slice(2,8);
+  return`<a class="gps" href="${url}" target="_blank" rel="noopener" title="Open in Google Maps">${addr}</a>`+
+    `<button class="gps-copy" onclick="copyAddr(this,'${addr.replace(/'/g,"&#39;")}')" title="Copy address">📋</button>`;
+}
+function copyAddr(btn,addr){
+  navigator.clipboard.writeText(addr).then(()=>{
+    const orig=btn.textContent; btn.textContent="✓ Copied";
+    setTimeout(()=>btn.textContent=orig,1500);
+  }).catch(()=>{
+    // fallback for non-https
+    const ta=document.createElement("textarea");
+    ta.value=addr; document.body.appendChild(ta); ta.select();
+    document.execCommand("copy"); document.body.removeChild(ta);
+    const orig=btn.textContent; btn.textContent="✓ Copied";
+    setTimeout(()=>btn.textContent=orig,1500);
+  });
+}
+
+// ─── Word (.docx) Export ──────────────────────────────────────────────────────
+$("export-word").addEventListener("click",()=>{
+  if(!lastResult)return;
+  const {drivers:wDrivers,unassigned:wUnassigned}=lastResult;
+
+  // Build a clean HTML document that Word can open perfectly
+  // Word imports HTML/MHTML reliably — we use that instead of raw XML
+  const totalCost=wDrivers.reduce((s,d)=>s+d.cost,0);
+  const target=totalCost/wDrivers.length;
+  function hslHex(css){
+    const m=css.match(/hsl\((\d+),\s*(\d+)%,\s*(\d+)%\)/);
+    if(!m)return'888888';
+    let h=+m[1]/360,s=+m[2]/100,l=+m[3]/100,r,g,b;
+    if(s===0){r=g=b=l;}else{
+      const q=l<0.5?l*(1+s):l+s-l*s,p=2*l-q;
+      const h2r=(p,q,t)=>{if(t<0)t+=1;if(t>1)t-=1;if(t<1/6)return p+(q-p)*6*t;if(t<.5)return q;if(t<2/3)return p+(q-p)*(2/3-t)*6;return p;};
+      r=h2r(p,q,h+1/3);g=h2r(p,q,h);b=h2r(p,q,h-1/3);
+    }
+    return[r,g,b].map(v=>Math.round(v*255).toString(16).padStart(2,'0')).join('');
+  }
+
+  const driverSections=wDrivers.map((d,di)=>{
+    const hex=hslHex(DCOLORS[di%DCOLORS.length]);
+    const lightHex=hex.replace(/../g,s=>Math.min(255,parseInt(s,16)+100).toString(16).padStart(2,'0'));
+    const diff=d.cost-target;
+    const diffStr=(diff>=0?"+":"")+money(diff);
+
+    const rows=d.trips.map(t=>{
+      const pickTime=t.willCall?"Will Call":fmtTime(t.startMin);
+      const apptTime=t.willCall?"Will Call":fmtTime(t.apptMin);
+      const leg=t.isReturn?"↩ Return":"→ Outbound";
+      const notes=[t.keptTag,t.forcedLast?"Last of day":"",t.willCall?"Will Call":""].filter(Boolean).join(" · ");
+      // Outbound = light yellow, Return = white
+      const bgColor=t.isReturn?`#ffffff`:`#fffde7`;
+      const fmtPhone=p=>{if(!p)return'';const d=String(p).replace(/\D/g,'');return d.length===10?`(${d.slice(0,3)}) ${d.slice(3,6)}-${d.slice(6)}`:(d||'');};
+      const rawPhone=t.phone?String(t.phone).replace(/\D/g,''):'';
+      const phoneLink=rawPhone
+        ?`<a href="tel:${rawPhone}" style="color:#1a5fbb;text-decoration:none;font-size:9pt">${fmtPhone(rawPhone)}</a>`
+        :'';
+      const memberName=t.name+(phoneLink?`<br/>${phoneLink}`:'');
+      // GPS clickable links for Word
+      function wordGpsLink(addr){
+        if(!addr)return"—";
+        const url="https://www.google.com/maps/dir/?api=1&destination="+encodeURIComponent(addr);
+        return`<a href="${url}" style="color:#1a5fbb;text-decoration:underline">${addr}</a>`;
+      }
+      return`<tr>
+        <td style="background:${bgColor};padding:5px 8px;border:1px solid #ccc;font-size:10pt">${memberName}</td>
+        <td style="background:${bgColor};padding:5px 8px;border:1px solid #ccc;font-size:10pt;white-space:nowrap">${leg}</td>
+        <td style="background:${bgColor};padding:5px 8px;border:1px solid #ccc;font-size:10pt;white-space:nowrap">${pickTime}</td>
+        <td style="background:${bgColor};padding:5px 8px;border:1px solid #ccc;font-size:10pt;white-space:nowrap">${apptTime}</td>
+        <td style="background:${bgColor};padding:5px 8px;border:1px solid #ccc;font-size:10pt">${wordGpsLink(t.pickFull)}</td>
+        <td style="background:${bgColor};padding:5px 8px;border:1px solid #ccc;font-size:10pt">${wordGpsLink(t.dropFull)}</td>
+        <td style="background:${bgColor};padding:5px 8px;border:1px solid #ccc;font-size:10pt;text-align:right">${money(t.cost)}</td>
+        <td style="background:${bgColor};padding:5px 8px;border:1px solid #ccc;font-size:10pt;color:#666">${notes}</td>
+      </tr>`;
+    }).join("");
+
+    return`
+      <h2 style="color:#${hex};margin:24pt 0 4pt;font-family:Arial,sans-serif;font-size:14pt;border-bottom:2pt solid #${hex};padding-bottom:4pt">
+        ${d.name}
+      </h2>
+      <p style="margin:0 0 8pt;font-size:10pt;font-family:Arial,sans-serif;color:#444">
+        <b>${d.trips.length} trips</b> &nbsp;·&nbsp; <b>${money(d.cost)}</b> &nbsp;·&nbsp;
+        <span style="color:${diff>0?'#cc6600':diff<-1?'#cc0000':'#007744'}">${diffStr} vs target</span>
+      </p>
+      <table style="border-collapse:collapse;width:100%;font-family:Arial,sans-serif;margin-bottom:20pt">
+        <thead>
+          <tr>
+            ${['Member','Leg','Est. Pickup','Appt Time','Pickup Address','Delivery Address','Cost','Notes']
+              .map(h=>`<th style="background:#${hex};color:#fff;padding:6px 8px;border:1px solid #999;font-size:10pt;text-align:left;white-space:nowrap">${h}</th>`).join('')}
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+        <tfoot>
+          <tr>
+            <td colspan="6" style="padding:5px 8px;border:1px solid #ccc;font-weight:bold;font-size:10pt;background:#${lightHex}">TOTAL</td>
+            <td style="padding:5px 8px;border:1px solid #ccc;font-weight:bold;font-size:10pt;text-align:right;background:#${lightHex}">${money(d.cost)}</td>
+            <td style="background:#${lightHex};border:1px solid #ccc"></td>
+          </tr>
+        </tfoot>
+      </table>`;
+  }).join("");
+
+  // Wrap in a full HTML doc — Word opens this perfectly via .doc extension
+  const html=`<!DOCTYPE html>
+<html xmlns:o="urn:schemas-microsoft-com:office:office"
+      xmlns:w="urn:schemas-microsoft-com:office:word"
+      xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+<meta charset="UTF-8"/>
+<meta name="theme-color" content="#f5a623"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="RouteSplit"/>
+<link rel="manifest" href="manifest.json"/>
+<link rel="apple-touch-icon" href="icons/icon-192.png"/>
+<meta name="ProgId" content="Word.Document"/>
+<!--[if gte mso 9]>
+<xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument></xml>
+<![endif]-->
+<style>
+  @page { size: A4 landscape; margin: 1.5cm; }
+  body { font-family: Arial, sans-serif; font-size: 11pt; color: #111; }
+  h1   { font-size: 18pt; color: #f5a623; margin: 0 0 4pt; }
+  table{ border-collapse: collapse; }
+  td,th{ font-size: 10pt; }
+</style>
+</head>
+<body>
+  <h1>RouteSplit v${APP_VERSION} — Dispatch Schedule</h1>
+  <p style="color:#666;font-size:10pt;margin:0 0 16pt">
+    ${wDrivers.reduce((s,d)=>s+d.trips.length,0)} trips &nbsp;·&nbsp;
+    ${money(totalCost)} total &nbsp;·&nbsp;
+    ${money(target)} target / driver &nbsp;·&nbsp;
+    ${wDrivers.length} drivers &nbsp;·&nbsp;
+    Generated ${new Date().toLocaleDateString()}
+  </p>
+  ${driverSections}
+  ${wUnassigned&&wUnassigned.length?`
+  <h2 style="color:#cc2222;margin:24pt 0 4pt;font-family:Arial,sans-serif;font-size:14pt;border-bottom:2pt solid #cc2222;padding-bottom:4pt">
+    ⚠ Unassigned — Requires Manual Dispatch
+  </h2>
+  <p style="margin:0 0 8pt;font-size:10pt;font-family:Arial,sans-serif;color:#880000">
+    <b>${wUnassigned.length} trip${wUnassigned.length>1?'s':''}</b> could not be automatically assigned without violating scheduling rules.
+    Total cost: <b>${money(wUnassigned.reduce((s,t)=>s+(t.cost||0),0))}</b>
+  </p>
+  <table style="border-collapse:collapse;width:100%;font-family:Arial,sans-serif;margin-bottom:20pt">
+    <thead>
+      <tr>${['Member','Leg','Est. Pickup','Appt Time','Pickup Address','Delivery Address','Cost','Reason'].map(h=>`<th style="background:#cc2222;color:#fff;padding:6px 8px;border:1px solid #999;font-size:10pt;text-align:left;white-space:nowrap">${h}</th>`).join('')}</tr>
+    </thead>
+    <tbody>
+      ${wUnassigned.map(t=>{
+        const pickTime=t.willCall?"Will Call":fmtTime(t.startMin);
+        const apptTime=t.willCall?"Will Call":fmtTime(t.apptMin);
+        const leg=t.isReturn?"↩ Return":"→ Outbound";
+        const bg='#ffe0e0';
+        function wordGpsLink(addr){if(!addr)return"—";const url="https://www.google.com/maps/dir/?api=1&destination="+encodeURIComponent(addr);return`<a href="${url}" style="color:#1a5fbb;text-decoration:underline">${addr}</a>`;}
+        return`<tr>
+          <td style="background:${bg};padding:5px 8px;border:1px solid #ccc;font-size:10pt;font-weight:bold">${t.name}</td>
+          <td style="background:${bg};padding:5px 8px;border:1px solid #ccc;font-size:10pt;white-space:nowrap">${leg}</td>
+          <td style="background:${bg};padding:5px 8px;border:1px solid #ccc;font-size:10pt;white-space:nowrap">${pickTime}</td>
+          <td style="background:${bg};padding:5px 8px;border:1px solid #ccc;font-size:10pt;white-space:nowrap">${apptTime}</td>
+          <td style="background:${bg};padding:5px 8px;border:1px solid #ccc;font-size:10pt">${wordGpsLink(t.pickFull)}</td>
+          <td style="background:${bg};padding:5px 8px;border:1px solid #ccc;font-size:10pt">${wordGpsLink(t.dropFull)}</td>
+          <td style="background:${bg};padding:5px 8px;border:1px solid #ccc;font-size:10pt;text-align:right">${money(t.cost||0)}</td>
+          <td style="background:${bg};padding:5px 8px;border:1px solid #ccc;font-size:10pt;color:#880000">${t.unassignedReason||'Unassigned'}</td>
+        </tr>`;
+      }).join('')}
+    </tbody>
+  </table>`:''}
+<\/body>
+<\/html>`;
+
+  const blob=new Blob([html],{type:'application/msword'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.download=`RouteSplit_v${APP_VERSION}_${schedDate||"dispatch"}.doc`;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url),2000);
+});
+$("export").addEventListener("click",()=>{
+  if(!lastResult)return;
+  const {drivers:lastDrivers,unassigned:lastUnassigned}=lastResult;
+
+  // ── Pure OpenXML xlsx builder ─────────────────────────────────────────────
+  // xlsx 0.18.5 doesn't write fill colors; we build the file from raw XML.
+
+  function hslToRGB(css){
+    const m=css.match(/hsl\((\d+),\s*(\d+)%,\s*(\d+)%\)/);
+    if(!m)return'888888';
+    let h=+m[1]/360,s=+m[2]/100,l=+m[3]/100,r,g,b;
+    if(s===0){r=g=b=l;}
+    else{
+      const q=l<0.5?l*(1+s):l+s-l*s,p=2*l-q;
+      const hue=(p,q,t)=>{if(t<0)t+=1;if(t>1)t-=1;if(t<1/6)return p+(q-p)*6*t;if(t<.5)return q;if(t<2/3)return p+(q-p)*(2/3-t)*6;return p;};
+      r=hue(p,q,h+1/3);g=hue(p,q,h);b=hue(p,q,h-1/3);
+    }
+    return[r,g,b].map(v=>Math.round(v*255).toString(16).padStart(2,'0').toUpperCase()).join('');
+  }
+  function lightenHex(hex,ratio){
+    return hex.replace(/../g,s=>{const v=parseInt(s,16);return Math.min(255,Math.round(v+(255-v)*ratio)).toString(16).padStart(2,'0').toUpperCase();});
+  }
+  function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+  function colLetter(n){let s='';while(n>=0){s=String.fromCharCode(65+n%26)+s;n=Math.floor(n/26)-1;}return s;}
+  function cellRef(r,c){return colLetter(c)+(r+1);}
+
+  // Style indices (we build a global style table)
+  const styleTable={fills:[],fonts:[],borders:[],xfs:[]};
+  const fillMap={},fontMap={},xfMap={};
+
+  function getFillIdx(argbColor){
+    const k=argbColor||'none';
+    if(fillMap[k]!==undefined)return fillMap[k];
+    const idx=styleTable.fills.length;
+    styleTable.fills.push(argbColor?
+      `<fill><patternFill patternType="solid"><fgColor rgb="${argbColor}"/><bgColor indexed="64"/></patternFill></fill>`:
+      `<fill><patternFill patternType="none"/></fill>`);
+    fillMap[k]=idx;return idx;
+  }
+  function getFontIdx(bold,italic,sz,colorRGB,underline){
+    const k=`${bold}|${italic}|${sz}|${colorRGB}|${underline}`;
+    if(fontMap[k]!==undefined)return fontMap[k];
+    const idx=styleTable.fonts.length;
+    styleTable.fonts.push(`<font>${bold?'<b/>':''}${italic?'<i/>':''}${underline?'<u/>':''}<sz val="${sz||11}"/><color rgb="${colorRGB||'FF000000'}"/><name val="Calibri"/><family val="2"/></font>`);
+    fontMap[k]=idx;return idx;
+  }
+  function getXfIdx(fillId,fontId,borderId,wrap,halign,valign){
+    const k=`${fillId}|${fontId}|${borderId}|${wrap}|${halign}|${valign}`;
+    if(xfMap[k]!==undefined)return xfMap[k];
+    const idx=styleTable.xfs.length;
+    const align=`<alignment${wrap?' wrapText="1"':''}${halign?` horizontal="${halign}"`:''}${valign?` vertical="${valign}"`:' vertical="center"'}/>`; 
+    styleTable.xfs.push(`<xf numFmtId="0" fontId="${fontId}" fillId="${fillId}" borderId="${borderId}" xfId="0" applyFill="1" applyFont="1" applyBorder="1" applyAlignment="1">${align}</xf>`);
+    xfMap[k]=idx;return idx;
+  }
+
+  // Pre-init default fills (Excel requires exactly these 2 as first fills)
+  styleTable.fills.push('<fill><patternFill patternType="none"/></fill>');
+  fillMap['none']=0;
+  styleTable.fills.push('<fill><patternFill patternType="gray125"/></fill>');
+  // fonts placeholder - font 0 = default
+  styleTable.fonts.push('<font><sz val="11"/><color theme="1"/><name val="Calibri"/><family val="2"/><scheme val="minor"/></font>');
+  // borders
+  const BORDER_NONE='<border><left/><right/><top/><bottom/><diagonal/></border>';
+  const BORDER_THIN='<border><left style="thin"><color rgb="FFD0D5DE"/></left><right style="thin"><color rgb="FFD0D5DE"/></right><top style="thin"><color rgb="FFD0D5DE"/></top><bottom style="thin"><color rgb="FFD0D5DE"/></bottom><diagonal/></border>';
+  const BORDER_MED='<border><left style="medium"><color rgb="FF000000"/></left><right style="medium"><color rgb="FF000000"/></right><top style="medium"><color rgb="FF000000"/></top><bottom style="medium"><color rgb="FF000000"/></bottom><diagonal/></border>';
+  styleTable.borders=[BORDER_NONE,BORDER_THIN,BORDER_MED];
+  // Default xf
+  styleTable.xfs.push('<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>');
+  xfMap['0|0|0|undefined|undefined|undefined']=0;
+
+  // Style builders
+  function sHdr(driverHex){
+    const fi=getFillIdx('FF'+driverHex);
+    const fo=getFontIdx(true,false,11,'FF0A0C10',false);
+    return getXfIdx(fi,fo,2,true,'center','center');
+  }
+  function sOutbound(){
+    const fi=getFillIdx('FFFDE7'); // light yellow
+    const fo=getFontIdx(false,false,10,'FF0A0C10',false);
+    return getXfIdx(fi,fo,1,true,null,'center');
+  }
+  function sOutboundBold(){
+    const fi=getFillIdx('FFFDE7');
+    const fo=getFontIdx(true,false,10,'FF0A0C10',false);
+    return getXfIdx(fi,fo,1,true,null,'center');
+  }
+  function sReturn(){
+    const fi=getFillIdx('FFFFFFFF'); // white
+    const fo=getFontIdx(false,true,10,'FF444C5C',false);
+    return getXfIdx(fi,fo,1,true,null,'center');
+  }
+  function sLink(isRet){
+    const fi=getFillIdx(isRet?'FFFFFFFF':'FFFDE7');
+    const fo=getFontIdx(false,isRet,10,'FF1A5FBB',true);
+    return getXfIdx(fi,fo,1,true,null,'center');
+  }
+  function sTotal(driverHex){
+    const tintHex=lightenHex(driverHex,0.70);
+    const fi=getFillIdx('FF'+tintHex);
+    const fo=getFontIdx(true,false,11,'FF0A0C10',false);
+    return getXfIdx(fi,fo,2,false,null,'center');
+  }
+  function sSummaryHdr(){
+    const fi=getFillIdx('FF2A2F3A');
+    const fo=getFontIdx(true,false,11,'FFCDD1D8',false);
+    return getXfIdx(fi,fo,2,false,'center','center');
+  }
+  function sSummaryData(driverHex){
+    const fi=getFillIdx('FF'+lightenHex(driverHex,0.85));
+    const fo=getFontIdx(false,false,10,'FF0A0C10',false);
+    return getXfIdx(fi,fo,1,false,null,'center');
+  }
+
+  // Sheet data builder
+  function buildSheet(rows,colWidths){
+    // rows: array of arrays of {v, t, s, f} objects
+    // t: 's'=string, 'n'=number, 'f'=formula
+    const sharedStrings=[];
+    const ssMap={};
+    function getSS(v){
+      const sv=String(v==null?'':v);
+      if(ssMap[sv]!==undefined)return ssMap[sv];
+      const idx=sharedStrings.length;
+      sharedStrings.push(sv);
+      ssMap[sv]=idx;
+      return idx;
+    }
+    const sheetRows=rows.map((row,ri)=>{
+      const cells=row.map((cell,ci)=>{
+        if(!cell)return'';
+        const ref=cellRef(ri,ci);
+        const s=` s="${cell.s||0}"`;
+        if(cell.f){
+          return`<c r="${ref}"${s} t="str"><f>${esc(cell.f)}</f><v></v></c>`;
+        } else if(cell.t==='n'){
+          return`<c r="${ref}"${s} t="n"><v>${cell.v}</v></c>`;
+        } else {
+          const si=getSS(cell.v);
+          return`<c r="${ref}"${s} t="s"><v>${si}</v></c>`;
+        }
+      }).join('');
+      return`<row r="${ri+1}">${cells}</row>`;
+    }).join('');
+    const lastRow=rows.length;
+    const lastCol=rows.reduce((m,r)=>Math.max(m,r.length),0);
+    const ref=`A1:${cellRef(lastRow-1,lastCol-1)}`;
+    const colsXml=colWidths.map((w,i)=>`<col min="${i+1}" max="${i+1}" width="${w}" customWidth="1"/>`).join('');
+    const sheetXml=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cols>${colsXml}</cols><sheetData>${sheetRows}</sheetData></worksheet>`;
+    return{sheetXml,sharedStrings};
+  }
+
+  // Build all sheets
+  const sheets=[];
+  const allSS=[];
+  const ssGlobalMap={};
+  function globalSS(v){
+    const sv=String(v==null?'':v);
+    if(ssGlobalMap[sv]!==undefined)return ssGlobalMap[sv];
+    const idx=allSS.length;
+    allSS.push(sv);
+    ssGlobalMap[sv]=idx;
+    return idx;
+  }
+  function c(v,styleIdx,isNum,formula){
+    return{v,s:styleIdx,t:isNum?'n':formula?'f':'s',f:formula||null};
+  }
+
+  // ── Summary sheet ──────────────────────────────────────────────────────────
+  const totalCost=lastDrivers.reduce((s,d)=>s+d.cost,0);
+  const target=totalCost/lastDrivers.length;
+  const sumHdrs=['Driver','Trips','Total Cost','vs Target','% of Total'];
+  const sumRows=[[...sumHdrs.map((h,i)=>({v:h,s:sSummaryHdr(),t:'s'}))]];
+  lastDrivers.forEach((d,di)=>{
+    const hex=hslToRGB(DCOLORS[di%DCOLORS.length]);
+    const diff=d.cost-target;
+    const pct=totalCost?Math.round(d.cost/totalCost*1000)/10:0;
+    sumRows.push([d.name,d.trips.length,d.cost,diff,pct].map((v,ci)=>({v,s:sSummaryData(hex),t:ci>=2?'n':'s'})));
+  });
+  sheets.push({name:'Summary',rows:sumRows,cols:[16,8,13,13,11]});
+
+  // ── Driver sheets ──────────────────────────────────────────────────────────
+  const hdrs=['Member','Phone','Leg','Est. Pickup','Appt Time','Miles','Drive Min','Pickup Address','Delivery Address','Cost','Notes'];
+  const fmtPhone=p=>{if(!p)return'';const d=String(p).replace(/\D/g,'');return d.length===10?`(${d.slice(0,3)}) ${d.slice(3,6)}-${d.slice(6)}`:(d||'');};
+
+  lastDrivers.forEach((d,di)=>{
+    const hex=hslToRGB(DCOLORS[di%DCOLORS.length]);
+    const hdrStyle=sHdr(hex);
+    const rows=[[...hdrs.map(h=>({v:h,s:hdrStyle,t:'s'}))]];
+
+    d.trips.forEach(t=>{
+      const isRet=!!t.isReturn;
+      const ds=isRet?sReturn():sOutbound();
+      const dsB=isRet?sReturn():sOutboundBold();
+      const ls=sLink(isRet);
+      const pickTime=t.willCall?"Will Call":fmtTime(t.startMin);
+      const apptTime=t.willCall?"Will Call":fmtTime(t.apptMin);
+      const rawPhone=t.phone?String(t.phone).replace(/\D/g,''):'';
+      const notes=[t.keptTag,t.forcedLast?"last of day":"",t.willCall?"Will Call":""].filter(Boolean).join("; ");
+      const phoneFormula=rawPhone?`HYPERLINK("tel:${rawPhone}","${fmtPhone(rawPhone)}")`:null;
+      const pickFormula=t.pickFull?`HYPERLINK("https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(t.pickFull).replace(/"/g,'""')}","${t.pickFull.replace(/"/g,'""')}")`:null;
+      const dropFormula=t.dropFull?`HYPERLINK("https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(t.dropFull).replace(/"/g,'""')}","${t.dropFull.replace(/"/g,'""')}")`:null;
+      rows.push([
+        {v:t.name,s:dsB,t:'s'},
+        {v:fmtPhone(rawPhone),s:ls,t:'s',f:phoneFormula},
+        {v:isRet?"↩ Return":"→ Outbound",s:ds,t:'s'},
+        {v:pickTime,s:ds,t:'s'},
+        {v:apptTime,s:ds,t:'s'},
+        {v:t.miles||0,s:ds,t:'n'},
+        {v:t.driveMin||0,s:ds,t:'n'},
+        {v:t.pickFull||'',s:ls,t:'s',f:pickFormula},
+        {v:t.dropFull||'',s:ls,t:'s',f:dropFormula},
+        {v:t.cost||0,s:ds,t:'n'},
+        {v:notes,s:ds,t:'s'},
+      ]);
+    });
+    // Total row
+    const totStyle=sTotal(hex);
+    rows.push(hdrs.map((_,ci)=>({v:ci===0?'TOTAL':ci===9?d.cost:'',s:totStyle,t:ci===9?'n':'s'})));
+    sheets.push({name:d.name.slice(0,31),rows,cols:[24,16,12,12,12,7,9,42,42,9,24]});
+  });
+
+  // ── Unassigned sheet ───────────────────────────────────────────────────────
+  if(lastUnassigned&&lastUnassigned.length){
+    const uHdrStyle=sHdr('CC2222'); // dark red header (sHdr prepends FF automatically)
+    const uDs  =()=>{const fi=getFillIdx('FFFFE0E0');const fo=getFontIdx(false,false,10,'FF550000',false);return getXfIdx(fi,fo,1,true,null,'center');};
+    const uDsB =()=>{const fi=getFillIdx('FFFFE0E0');const fo=getFontIdx(true, false,10,'FF550000',false);return getXfIdx(fi,fo,1,true,null,'center');};
+    const uLink=()=>{const fi=getFillIdx('FFFFE0E0');const fo=getFontIdx(false,false,10,'FF1A5FBB',true); return getXfIdx(fi,fo,1,true,null,'center');};
+    const uTot =()=>{const fi=getFillIdx('FFFF9999');const fo=getFontIdx(true, false,11,'FF550000',false);return getXfIdx(fi,fo,2,false,null,'center');};
+    const uHdrs=['Member','Phone','Leg','Est. Pickup','Appt Time','Miles','Drive Min','Pickup Address','Delivery Address','Cost','Reason'];
+    const uRows=[[...uHdrs.map(h=>({v:h,s:uHdrStyle,t:'s'}))]];
+    lastUnassigned.forEach(t=>{
+      const isRet=!!t.isReturn;
+      const pickTime=t.willCall?"Will Call":fmtTime(t.startMin);
+      const apptTime=t.willCall?"Will Call":fmtTime(t.apptMin);
+      const rawPhone=t.phone?String(t.phone).replace(/\D/g,''):'';
+      const phoneFormula=rawPhone?`HYPERLINK("tel:${rawPhone}","${fmtPhone(rawPhone)}")`:null;
+      const pickFormula=t.pickFull?`HYPERLINK("https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(t.pickFull).replace(/"/g,'""')}","${t.pickFull.replace(/"/g,'""')}")`:null;
+      const dropFormula=t.dropFull?`HYPERLINK("https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(t.dropFull).replace(/"/g,'""')}","${t.dropFull.replace(/"/g,'""')}")`:null;
+      uRows.push([
+        {v:t.name,         s:uDsB(),t:'s'},
+        {v:fmtPhone(rawPhone),s:uLink(),t:'s',f:phoneFormula},
+        {v:isRet?"Return":"Outbound",s:uDs(),t:'s'},
+        {v:pickTime,       s:uDs(),t:'s'},
+        {v:apptTime,       s:uDs(),t:'s'},
+        {v:t.miles||0,     s:uDs(),t:'n'},
+        {v:t.driveMin||0,  s:uDs(),t:'n'},
+        {v:t.pickFull||'', s:uLink(),t:'s',f:pickFormula},
+        {v:t.dropFull||'', s:uLink(),t:'s',f:dropFormula},
+        {v:t.cost||0,      s:uDs(),t:'n'},
+        {v:t.unassignedReason||'Unassigned',s:uDs(),t:'s'},
+      ]);
+    });
+    const uTotal=lastUnassigned.reduce((s,t)=>s+(t.cost||0),0);
+    uRows.push(uHdrs.map((_,ci)=>({v:ci===0?'TOTAL':ci===9?uTotal:'',s:uTot(),t:ci===9?'n':'s'})));
+    // Sheet name must be ≤31 chars, no special chars: use plain "Unassigned"
+    sheets.push({name:'Unassigned',rows:uRows,cols:[24,16,12,12,12,7,9,42,42,9,36]});
+  }
+  const stylesXml=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<fonts count="${styleTable.fonts.length}">${styleTable.fonts.join('')}</fonts>
+<fills count="${styleTable.fills.length}">${styleTable.fills.join('')}</fills>
+<borders count="${styleTable.borders.length}">${styleTable.borders.join('')}</borders>
+<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+<cellXfs count="${styleTable.xfs.length}">${styleTable.xfs.join('')}</cellXfs>
+</styleSheet>`;
+
+  // ── Build sheet XML (using global shared strings) ───────────────────────────
+  // Convert rows to XML, building global shared strings
+  function rowsToXml(rows){
+    return rows.map((row,ri)=>{
+      const cells=row.map((cell,ci)=>{
+        if(!cell)return'';
+        const ref=cellRef(ri,ci);
+        const sx=` s="${cell.s||0}"`;
+        if(cell.f){
+          return`<c r="${ref}"${sx} t="str"><f>${esc(cell.f)}</f><v></v></c>`;
+        } else if(cell.t==='n'){
+          const nv=isNaN(Number(cell.v))?0:Number(cell.v);
+          return`<c r="${ref}"${sx}><v>${nv}</v></c>`;
+        } else {
+          const si=globalSS(cell.v);
+          return`<c r="${ref}"${sx} t="s"><v>${si}</v></c>`;
+        }
+      }).join('');
+      return`<row r="${ri+1}">${cells}</row>`;
+    }).join('');
+  }
+
+  const sheetXmls=sheets.map(sh=>{
+    const rowsXml=rowsToXml(sh.rows);
+    const lastRow=sh.rows.length;
+    const lastCol=sh.rows.reduce((m,r)=>Math.max(m,r.length),0);
+    const colsXml=sh.cols.map((w,i)=>`<col min="${i+1}" max="${i+1}" width="${w}" customWidth="1"/>`).join('');
+    return`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cols>${colsXml}</cols><sheetData>${rowsXml}</sheetData></worksheet>`;
+  });
+
+  const ssXml=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="${allSS.length}" uniqueCount="${allSS.length}">${allSS.map(s=>`<si><t>${esc(s)}</t></si>`).join('')}</sst>`;
+
+  // ── Assemble ZIP ────────────────────────────────────────────────────────────
+  // Pure-JS zip using deflate via CompressionStream (available in modern browsers)
+  // Fallback: store without compression
+  async function deflate(str){
+    const bytes=new TextEncoder().encode(str);
+    try{
+      const cs=new CompressionStream('deflate-raw');
+      const w=cs.writable.getWriter();
+      w.write(bytes); w.close();
+      const chunks=[];
+      const r=cs.readable.getReader();
+      while(true){const{done,value}=await r.read();if(done)break;chunks.push(value);}
+      const out=new Uint8Array(chunks.reduce((s,c)=>s+c.length,0));
+      let off=0;chunks.forEach(c=>{out.set(c,off);off+=c.length;});
+      return{data:out,method:8};
+    }catch(e){
+      return{data:bytes,method:0};
+    }
+  }
+
+  function crc32(data){
+    const table=new Uint32Array(256);
+    for(let i=0;i<256;i++){let c=i;for(let j=0;j<8;j++)c=c&1?(0xEDB88320^(c>>>1)):(c>>>1);table[i]=c;}
+    let crc=0xFFFFFFFF;
+    for(let i=0;i<data.length;i++)crc=table[(crc^data[i])&0xFF]^(crc>>>8);
+    return(crc^0xFFFFFFFF)>>>0;
+  }
+
+  function u32le(n){const b=new Uint8Array(4);new DataView(b.buffer).setUint32(0,n,true);return b;}
+  function u16le(n){const b=new Uint8Array(2);new DataView(b.buffer).setUint16(0,n,true);return b;}
+
+  async function buildZip(files){
+    const entries=[];
+    let offset=0;
+    const localHeaders=[];
+
+    for(const [name,content] of files){
+      const nameBytes=new TextEncoder().encode(name);
+      const rawBytes=new TextEncoder().encode(content);
+      const{data:compData,method}=await deflate(content);
+      const crc=crc32(rawBytes);
+      const localHeader=new Uint8Array([
+        0x50,0x4B,0x03,0x04, // sig
+        0x14,0x00,           // version 2.0
+        0x00,0x00,           // flags
+        ...u16le(method),    // compression
+        0x00,0x00,0x00,0x00, // mod time/date
+        ...u32le(crc),
+        ...u32le(compData.length),
+        ...u32le(rawBytes.length),
+        ...u16le(nameBytes.length),
+        0x00,0x00,           // extra len
+        ...nameBytes,
+      ]);
+      const centralDir=new Uint8Array([
+        0x50,0x4B,0x01,0x02, // sig
+        0x14,0x00,           // version made
+        0x14,0x00,           // version needed
+        0x00,0x00,           // flags
+        ...u16le(method),
+        0x00,0x00,0x00,0x00, // mod time/date
+        ...u32le(crc),
+        ...u32le(compData.length),
+        ...u32le(rawBytes.length),
+        ...u16le(nameBytes.length),
+        0x00,0x00,           // extra len
+        0x00,0x00,           // comment len
+        0x00,0x00,           // disk start
+        0x00,0x00,           // int attr
+        0x00,0x00,0x00,0x00, // ext attr
+        ...u32le(offset),    // local header offset
+        ...nameBytes,
+      ]);
+      localHeaders.push({localHeader,compData,centralDir});
+      offset+=localHeader.length+compData.length;
+      entries.push(centralDir);
+    }
+
+    const cdOffset=offset;
+    const cdSize=entries.reduce((s,e)=>s+e.length,0);
+    const eocd=new Uint8Array([
+      0x50,0x4B,0x05,0x06, // sig
+      0x00,0x00,           // disk num
+      0x00,0x00,           // cd disk
+      ...u16le(entries.length),
+      ...u16le(entries.length),
+      ...u32le(cdSize),
+      ...u32le(cdOffset),
+      0x00,0x00,           // comment len
+    ]);
+
+    const parts=[...localHeaders.flatMap(e=>[e.localHeader,e.compData]),...entries,eocd];
+    const total=parts.reduce((s,p)=>s+p.length,0);
+    const out=new Uint8Array(total);
+    let off=0;
+    parts.forEach(p=>{out.set(p,off);off+=p.length;});
+    return out;
+  }
+
+  const wbRels=sheets.map((s,i)=>`<Relationship Id="rId${i+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i+1}.xml"/>`).join('');
+  const wbRelsXml=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${wbRels}<Relationship Id="rId${sheets.length+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/><Relationship Id="rId${sheets.length+2}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`;
+  const wbSheets=sheets.map((s,i)=>`<sheet name="${esc(s.name)}" sheetId="${i+1}" r:id="rId${i+1}"/>`).join('');
+  const wbXml=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${wbSheets}</sheets></workbook>`;
+  const contentTypes=[
+    '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>',
+    '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>',
+    '<Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/>',
+    ...sheets.map((_,i)=>`<Override PartName="/xl/worksheets/sheet${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`),
+  ].join('');
+  const ctXml=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>${contentTypes}</Types>`;
+  const relsXml=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`;
+
+  const files=[
+    ['[Content_Types].xml',ctXml],
+    ['_rels/.rels',relsXml],
+    ['xl/workbook.xml',wbXml],
+    ['xl/_rels/workbook.xml.rels',wbRelsXml],
+    ['xl/styles.xml',stylesXml],
+    ['xl/sharedStrings.xml',ssXml],
+    ...sheetXmls.map((xml,i)=>[`xl/worksheets/sheet${i+1}.xml`,xml]),
+  ];
+
+  buildZip(files).then(buf=>{
+    const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url; a.download=`RouteSplit_v${APP_VERSION}_${schedDate||"dispatch"}.xlsx`;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(url),2000);
+  });
+});
+</script>
+
+<div id="pwa-bar" style="display:none;position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1f232c;border:1px solid #f5a623;border-radius:14px;padding:14px 20px;align-items:center;gap:14px;z-index:9999;max-width:400px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.5)"><div style="flex:1"><div style="font-weight:700;font-size:14px;color:#e7ebf0">Install RouteSplit</div><div style="font-size:12px;color:#8b93a1;margin-top:2px">Works offline after install</div></div><button id="pwa-btn" style="background:#f5a623;color:#0f1115;border:none;border-radius:9px;padding:9px 16px;font-weight:700;cursor:pointer;font-family:inherit;font-size:13px">Install</button><button id="pwa-x" style="background:none;border:none;color:#8b93a1;cursor:pointer;font-size:20px;padding:0 2px">&#215;</button></div>
+<script>
+(function(){
+var p=null,bar=function(){return document.getElementById("pwa-bar");};
+var b=document.getElementById("pwa-btn"),x=document.getElementById("pwa-x");
+if(b)b.addEventListener("click",function(){if(p){p.prompt();p.userChoice.then(function(){p=null;});}});
+if(x)x.addEventListener("click",function(){var e=bar();if(e)e.style.display="none";});
+window.addEventListener("beforeinstallprompt",function(e){e.preventDefault();p=e;var r=bar();if(r)r.style.display="flex";});
+window.addEventListener("appinstalled",function(){p=null;var r=bar();if(r)r.style.display="none";});
+if(!("serviceWorker" in navigator)||window.self!==window.top)return;
+if(location.protocol!=="https:"&&location.hostname!=="localhost")return;
+window.addEventListener("load",function(){
+try{var s="Y29uc3QgQ0FDSEU9J3JzLXYyLjAnO2NvbnN0IEFTU0VUUz1bJy4vJywnLi9pbmRleC5odG1sJywnLi9tYW5pZmVzdC5qc29uJywnLi9pY29ucy9pY29uLTE5Mi5wbmcnLCcuL2ljb25zL2ljb24tNTEyLnBuZycsJ2h0dHBzOi8vY2RuanMuY2xvdWRmbGFyZS5jb20vYWpheC9saWJzL3hsc3gvMC4xOC41L3hsc3guZnVsbC5taW4uanMnXTtzZWxmLmFkZEV2ZW50TGlzdGVuZXIoJ2luc3RhbGwnLGZ1bmN0aW9uKGUpe2Uud2FpdFVudGlsKGNhY2hlcy5vcGVuKENBQ0hFKS50aGVuKGZ1bmN0aW9uKGMpe3JldHVybiBQcm9taXNlLmFsbFNldHRsZWQoQVNTRVRTLm1hcChmdW5jdGlvbih1KXtyZXR1cm4gYy5hZGQodSkuY2F0Y2goZnVuY3Rpb24oKXtyZXR1cm4gbnVsbDt9KX0pKTt9KS50aGVuKGZ1bmN0aW9uKCl7cmV0dXJuIHNlbGYuc2tpcFdhaXRpbmcoKTt9KSk7fSk7c2VsZi5hZGRFdmVudExpc3RlbmVyKCdhY3RpdmF0ZScsZnVuY3Rpb24oZSl7ZS53YWl0VW50aWwoY2FjaGVzLmtleXMoKS50aGVuKGZ1bmN0aW9uKGtzKXtyZXR1cm4gUHJvbWlzZS5hbGwoa3MuZmlsdGVyKGZ1bmN0aW9uKGspe3JldHVybiBrIT09Q0FDSEU7fSkubWFwKGZ1bmN0aW9uKGspe3JldHVybiBjYWNoZXMuZGVsZXRlKGspO30pKTt9KS50aGVuKGZ1bmN0aW9uKCl7cmV0dXJuIHNlbGYuY2xpZW50cy5jbGFpbSgpO30pKTt9KTtzZWxmLmFkZEV2ZW50TGlzdGVuZXIoJ2ZldGNoJyxmdW5jdGlvbihlKXtpZihlLnJlcXVlc3QubWV0aG9kIT09J0dFVCcpcmV0dXJuO2UucmVzcG9uZFdpdGgoY2FjaGVzLm1hdGNoKGUucmVxdWVzdCkudGhlbihmdW5jdGlvbihjYWNoZWQpe2lmKGNhY2hlZClyZXR1cm4gY2FjaGVkO3JldHVybiBmZXRjaChlLnJlcXVlc3QpLnRoZW4oZnVuY3Rpb24ocil7aWYoci5vayl7dmFyIGNsPXIuY2xvbmUoKTtjYWNoZXMub3BlbihDQUNIRSkudGhlbihmdW5jdGlvbihjKXtjLnB1dChlLnJlcXVlc3QsY2wpO30pO31yZXR1cm4gcjt9KS5jYXRjaChmdW5jdGlvbigpe3JldHVybiBjYWNoZWR8fG5ldyBSZXNwb25zZSgnT2ZmbGluZScse3N0YXR1czo1MDN9KTt9KTt9KSk7fSk7";
+var blob=new Blob([atob(s)],{type:"application/javascript"});
+var u=URL.createObjectURL(blob);
+navigator.serviceWorker.register(u,{scope:"./"})
+.then(function(){URL.revokeObjectURL(u);console.log("RouteSplit v2.0 offline ready");})
+.catch(function(e){console.log("SW:",e.message);});
+}catch(e){console.log("SW err:",e.message);}});
+})();
+</script>
+</body>
+</html>
