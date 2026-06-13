@@ -2,6 +2,13 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
+<meta name="theme-color" content="#f5a623"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="RouteSplit"/>
+<link rel="manifest" href="manifest.json"/>
+<link rel="apple-touch-icon" href="icons/icon-192.png"/>
 <link rel="apple-touch-icon" href="icons/icon-192.png"/>
 
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
@@ -411,11 +418,14 @@ function parseRows(json){
 
     const miles  =safeNum(get(r,"MILES"));
     const driveMin=Math.round(miles*MIN_PER_MILE);
-    const startMin=apptMin!=null?apptMin-driveMin:null;
 
     const legCode =tripNum.slice(-1).toUpperCase();    // "A"=outbound, "B"=return
     const tripPrefix=tripNum.slice(0,-1);
     const isReturn=getIsReturn(r,tripNum);
+
+    // Return leg: pickup happens AT the appt time (driver collects member from appt).
+    // Outbound: pickup is appt time minus drive time.
+    const startMin=apptMin!=null?(isReturn?apptMin:apptMin-driveMin):null;
 
     const puAddr=safeStr(get(r,"PU_ADDR"));
     const puCity=safeStr(get(r,"PU_CITY"));
@@ -451,11 +461,20 @@ function pairLegs(trips){
   });
   const pairs={}; // outbound._key -> return trip
   const usedAsReturn=new Set();
+  const orphans=[]; // 3rd+ legs that aren't paired — still need driver assignment
 
   // Pass 1: exact prefix match — same prefix, A=outbound B/C/D=return
+  // Within a multi-leg group, pair earliest return with the outbound;
+  // remaining returns (C, D…) become orphans and are assigned standalone.
   Object.values(byPrefix).forEach(group=>{
     const out=group.find(t=>!t.isReturn);
-    const rets=group.filter(t=>t.isReturn);
+    const rets=group.filter(t=>t.isReturn)
+      .sort((a,b)=>{
+        // Will Call returns MUST stay with the outbound (Rule 3.5),
+        // so they take pairing priority over fixed-time returns.
+        if(a.willCall!==b.willCall) return a.willCall?-1:1;
+        return (a.apptMin??1e9)-(b.apptMin??1e9);
+      });
     if(out&&rets.length){
       const ret=rets[0];
       pairs[out._key]=ret;
@@ -464,6 +483,15 @@ function pairLegs(trips){
       // so both legs show the same identifier (the pickup address of the outbound)
       if(ret.name!==out.name&&!ret.name.match(/^[A-Z]+ [A-Z]+$/)){
         ret.name=out.name;
+      }
+      // Extra returns on this prefix (C, D, …) → propagate name and queue as orphans
+      for(let i=1;i<rets.length;i++){
+        const extra=rets[i];
+        if(extra.name!==out.name&&!extra.name.match(/^[A-Z]+ [A-Z]+$/)){
+          extra.name=out.name;
+        }
+        usedAsReturn.add(extra._key);
+        orphans.push(extra);
       }
     }
   });
@@ -476,19 +504,14 @@ function pairLegs(trips){
     if(cands.length){pairs[out._key]=cands[0];usedAsReturn.add(cands[0]._key);}
   });
 
-  // Pass 3: any remaining unpaired returns — try to pair by name with any outbound
-  // This handles leg C (extra return) for the same member
+  // Pass 3: any remaining unpaired returns become orphans — assigned as
+  // standalone single-leg units so they aren't silently dropped.
   trips.filter(t=>t.isReturn&&!usedAsReturn.has(t._key)).forEach(ret=>{
-    const out=trips.find(t=>
-      !t.isReturn&&pairs[t._key]&&t.name===ret.name
-    );
-    // If the member's outbound already has a return but this is an extra leg,
-    // treat it as a standalone outbound-less return (won't crash, just displays)
-    // Mark as used so it doesn't get re-processed
     usedAsReturn.add(ret._key);
+    orphans.push(ret);
   });
 
-  return pairs;
+  return {pairs, orphans};
 }
 
 // ─── Core dispatch ────────────────────────────────────────────────────────────
@@ -499,12 +522,12 @@ function dispatch(trips,numDrivers){
   }));
   const unassigned=[]; // trips that can't be assigned without violating rules
 
-  const pairs=pairLegs(trips);
+  const {pairs, orphans}=pairLegs(trips);
   const returnKeys=new Set(Object.values(pairs).filter(r=>r!=null).map(r=>r._key));
 
   // ── Build pair-level work units ──────────────────────────────────────────
   // Each unit = outbound trip + optional return trip, with combined fare & schedule
-  const units = trips
+  const pairUnits = trips
     .filter(t=>t&&!t.isReturn&&!returnKeys.has(t._key)) // outbound legs only — exclude ALL returns
     .map(t=>{
       const ret=pairs[t._key]||null;
@@ -520,7 +543,23 @@ function dispatch(trips,numDrivers){
               mustKeepReturn, freeAfter,
               pickZip:t.pickZip||"", dropZip:t.dropZip||""};
     })
-    .filter(u=>u&&u.outbound) // never include units with undefined outbound
+    .filter(u=>u&&u.outbound); // never include units with undefined outbound
+
+  // ── Orphan units — 3rd+ legs for a member, assigned standalone ──────────
+  // These legs still carry isReturn=true so the UI renders them as return tags.
+  const orphanUnits = (orphans||[]).map(t=>{
+    const appt=t.apptMin??null;
+    return {
+      outbound:t, ret:null,
+      pairFare:t.cost||0,
+      outAppt:appt, retAppt:null, gap:null, mustKeepReturn:false,
+      freeAfter: appt!=null ? appt + BUFFER_MIN : null,
+      pickZip:t.pickZip||"", dropZip:t.dropZip||"",
+      isOrphanLeg:true,
+    };
+  }).filter(u=>u&&u.outbound);
+
+  const units = [...pairUnits, ...orphanUnits]
     .sort((a,b)=>(a.outAppt??1e9)-(b.outAppt??1e9));
 
   // ── Assign each unit to the best driver ─────────────────────────────────
@@ -612,8 +651,8 @@ function dispatch(trips,numDrivers){
     if(timingViolation(driver,unit)) score += 10000;
 
     // 6) AVAILABILITY — hard block under BUFFER_MIN, soft under BUFFER_PREF
-    const pickupStart=unit.outbound.startMin??unit.outAppt??0;
-    if(driver.lastEnd!=null){
+    const pickupStart=unit.outbound.startMin??unit.outAppt;
+    if(pickupStart!=null && driver.lastEnd!=null){
       const gap=pickupStart-driver.lastEnd;
       if(gap<BUFFER_MIN)       score+=(BUFFER_MIN-gap)*50;
       else if(gap<BUFFER_PREF) score+=(BUFFER_PREF-gap)*2;
@@ -728,10 +767,24 @@ function dispatch(trips,numDrivers){
     // Pick the best driver (lowest score), ignoring any with hard conflict (≥10000)
     const eligibleDrivers=drivers.filter((_,i)=>scores[i]<10000);
     const poolToUse=eligibleDrivers.length>0?eligibleDrivers:drivers; // fallback if all blocked
-    const chosen=poolToUse.reduce((best,d)=>
+    // Will Call orphan leg → prefer the driver carrying this member's outbound
+    // (Rule 3.5: Will Call must stay with the outbound). Fall through if that
+    // driver has a hard conflict.
+    let chosen=null;
+    if(unit.isOrphanLeg && unit.outbound.willCall){
+      const outDriver=drivers.find(d=>d.trips.some(t=>
+        !t.isReturn && t.name===unit.outbound.name
+      ));
+      if(outDriver && scores[drivers.indexOf(outDriver)]<10000) chosen=outDriver;
+    }
+    if(!chosen) chosen=poolToUse.reduce((best,d)=>
       scores[drivers.indexOf(d)]<scores[drivers.indexOf(best)]?d:best, poolToUse[0]);
 
-    assignTrip(chosen, unit.outbound, {chained:false});
+    // Orphan extra leg (3rd+ leg of a multi-leg member): tag for clear UI rendering
+    const outboundExtra = unit.isOrphanLeg
+      ? {chained:false, isReturn:true, keptRule:"extra", keptTag:"extra leg"}
+      : {chained:false};
+    assignTrip(chosen, unit.outbound, outboundExtra);
 
     if(!unit.ret){ closeUnit(chosen,unit); chosen.unitCount++; continue; }
 
@@ -925,6 +978,24 @@ function dispatch(trips,numDrivers){
     }
   }
 
+  // ── Will Call orphan rule (Rule 3.5) ─────────────────────────────────
+  // After balance, any Will Call orphan leg must ride with the driver
+  // who has its member's outbound. The balance pass moves whole pairs
+  // around without seeing orphans, so a WC orphan can get stranded.
+  drivers.forEach(driver=>{
+    const wcOrphans=driver.trips.filter(t=>t.isReturn&&t.willCall&&t.keptRule==="extra");
+    for(const orphan of wcOrphans){
+      const outDriver=drivers.find(d=>d.trips.some(t=>
+        !t.isReturn && t.name===orphan.name
+      ));
+      if(!outDriver||outDriver.id===driver.id) continue;
+      driver.trips=driver.trips.filter(t=>t._key!==orphan._key);
+      driver.cost-=orphan.cost||0;
+      outDriver.trips.push(orphan);
+      outDriver.cost+=orphan.cost||0;
+    }
+  });
+
   // ── Per-driver last outbound rule ─────────────────────────────────────
   // For each driver: find their last outbound of the day.
   // That member's return MUST be done by the same driver — move it if needed.
@@ -990,9 +1061,10 @@ function dispatch(trips,numDrivers){
         }
         const candidates=[...remaining].filter(i=>{
           const t=blocks[i][0].apptMin??blocks[i][0].startMin??Infinity;
-          return t-earliest<=TIE_WINDOW;
+          // When earliest is Infinity (no remaining block has a time), accept all
+          return earliest===Infinity || t-earliest<=TIE_WINDOW;
         });
-        let bestIdx=candidates[0];
+        let bestIdx=candidates[0]??[...remaining][0];
         if(candidates.length>1&&lastZip){
           let bestDist=Infinity;
           for(const i of candidates){
@@ -1316,6 +1388,13 @@ $("export-word").addEventListener("click",()=>{
       xmlns="http://www.w3.org/TR/REC-html40">
 <head>
 <meta charset="UTF-8"/>
+<meta name="theme-color" content="#f5a623"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="RouteSplit"/>
+<link rel="manifest" href="manifest.json"/>
+<link rel="apple-touch-icon" href="icons/icon-192.png"/>
 <meta name="ProgId" content="Word.Document"/>
 <!--[if gte mso 9]>
 <xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument></xml>
@@ -1811,6 +1890,28 @@ $("export").addEventListener("click",()=>{
     setTimeout(()=>URL.revokeObjectURL(url),2000);
   });
 });
+</script>
+
+<div id="pwa-bar" style="display:none;position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1f232c;border:1px solid #f5a623;border-radius:14px;padding:14px 20px;align-items:center;gap:14px;z-index:9999;max-width:400px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.5)"><div style="flex:1"><div style="font-weight:700;font-size:14px;color:#e7ebf0">Install RouteSplit</div><div style="font-size:12px;color:#8b93a1;margin-top:2px">Works offline after install</div></div><button id="pwa-btn" style="background:#f5a623;color:#0f1115;border:none;border-radius:9px;padding:9px 16px;font-weight:700;cursor:pointer;font-family:inherit;font-size:13px">Install</button><button id="pwa-x" style="background:none;border:none;color:#8b93a1;cursor:pointer;font-size:20px;padding:0 2px">&#215;</button></div>
+<script>
+(function(){
+var p=null,bar=function(){return document.getElementById("pwa-bar");};
+var b=document.getElementById("pwa-btn"),x=document.getElementById("pwa-x");
+if(b)b.addEventListener("click",function(){if(p){p.prompt();p.userChoice.then(function(){p=null;});}});
+if(x)x.addEventListener("click",function(){var e=bar();if(e)e.style.display="none";});
+window.addEventListener("beforeinstallprompt",function(e){e.preventDefault();p=e;var r=bar();if(r)r.style.display="flex";});
+window.addEventListener("appinstalled",function(){p=null;var r=bar();if(r)r.style.display="none";});
+if(!("serviceWorker" in navigator)||window.self!==window.top)return;
+if(location.protocol!=="https:"&&location.hostname!=="localhost")return;
+window.addEventListener("load",function(){
+try{var s="Y29uc3QgQ0FDSEU9J3JzLXYyLjAnO2NvbnN0IEFTU0VUUz1bJy4vJywnLi9pbmRleC5odG1sJywnLi9tYW5pZmVzdC5qc29uJywnLi9pY29ucy9pY29uLTE5Mi5wbmcnLCcuL2ljb25zL2ljb24tNTEyLnBuZycsJ2h0dHBzOi8vY2RuanMuY2xvdWRmbGFyZS5jb20vYWpheC9saWJzL3hsc3gvMC4xOC41L3hsc3guZnVsbC5taW4uanMnXTtzZWxmLmFkZEV2ZW50TGlzdGVuZXIoJ2luc3RhbGwnLGZ1bmN0aW9uKGUpe2Uud2FpdFVudGlsKGNhY2hlcy5vcGVuKENBQ0hFKS50aGVuKGZ1bmN0aW9uKGMpe3JldHVybiBQcm9taXNlLmFsbFNldHRsZWQoQVNTRVRTLm1hcChmdW5jdGlvbih1KXtyZXR1cm4gYy5hZGQodSkuY2F0Y2goZnVuY3Rpb24oKXtyZXR1cm4gbnVsbDt9KX0pKTt9KS50aGVuKGZ1bmN0aW9uKCl7cmV0dXJuIHNlbGYuc2tpcFdhaXRpbmcoKTt9KSk7fSk7c2VsZi5hZGRFdmVudExpc3RlbmVyKCdhY3RpdmF0ZScsZnVuY3Rpb24oZSl7ZS53YWl0VW50aWwoY2FjaGVzLmtleXMoKS50aGVuKGZ1bmN0aW9uKGtzKXtyZXR1cm4gUHJvbWlzZS5hbGwoa3MuZmlsdGVyKGZ1bmN0aW9uKGspe3JldHVybiBrIT09Q0FDSEU7fSkubWFwKGZ1bmN0aW9uKGspe3JldHVybiBjYWNoZXMuZGVsZXRlKGspO30pKTt9KS50aGVuKGZ1bmN0aW9uKCl7cmV0dXJuIHNlbGYuY2xpZW50cy5jbGFpbSgpO30pKTt9KTtzZWxmLmFkZEV2ZW50TGlzdGVuZXIoJ2ZldGNoJyxmdW5jdGlvbihlKXtpZihlLnJlcXVlc3QubWV0aG9kIT09J0dFVCcpcmV0dXJuO2UucmVzcG9uZFdpdGgoY2FjaGVzLm1hdGNoKGUucmVxdWVzdCkudGhlbihmdW5jdGlvbihjYWNoZWQpe2lmKGNhY2hlZClyZXR1cm4gY2FjaGVkO3JldHVybiBmZXRjaChlLnJlcXVlc3QpLnRoZW4oZnVuY3Rpb24ocil7aWYoci5vayl7dmFyIGNsPXIuY2xvbmUoKTtjYWNoZXMub3BlbihDQUNIRSkudGhlbihmdW5jdGlvbihjKXtjLnB1dChlLnJlcXVlc3QsY2wpO30pO31yZXR1cm4gcjt9KS5jYXRjaChmdW5jdGlvbigpe3JldHVybiBjYWNoZWR8fG5ldyBSZXNwb25zZSgnT2ZmbGluZScse3N0YXR1czo1MDN9KTt9KTt9KSk7fSk7";
+var blob=new Blob([atob(s)],{type:"application/javascript"});
+var u=URL.createObjectURL(blob);
+navigator.serviceWorker.register(u,{scope:"./"})
+.then(function(){URL.revokeObjectURL(u);console.log("RouteSplit v2.0 offline ready");})
+.catch(function(e){console.log("SW:",e.message);});
+}catch(e){console.log("SW err:",e.message);}});
+})();
 </script>
 </body>
 </html>

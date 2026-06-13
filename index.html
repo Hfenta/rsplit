@@ -469,7 +469,12 @@ function pairLegs(trips){
   Object.values(byPrefix).forEach(group=>{
     const out=group.find(t=>!t.isReturn);
     const rets=group.filter(t=>t.isReturn)
-      .sort((a,b)=>(a.apptMin??1e9)-(b.apptMin??1e9));
+      .sort((a,b)=>{
+        // Will Call returns MUST stay with the outbound (Rule 3.5),
+        // so they take pairing priority over fixed-time returns.
+        if(a.willCall!==b.willCall) return a.willCall?-1:1;
+        return (a.apptMin??1e9)-(b.apptMin??1e9);
+      });
     if(out&&rets.length){
       const ret=rets[0];
       pairs[out._key]=ret;
@@ -646,8 +651,8 @@ function dispatch(trips,numDrivers){
     if(timingViolation(driver,unit)) score += 10000;
 
     // 6) AVAILABILITY — hard block under BUFFER_MIN, soft under BUFFER_PREF
-    const pickupStart=unit.outbound.startMin??unit.outAppt??0;
-    if(driver.lastEnd!=null){
+    const pickupStart=unit.outbound.startMin??unit.outAppt;
+    if(pickupStart!=null && driver.lastEnd!=null){
       const gap=pickupStart-driver.lastEnd;
       if(gap<BUFFER_MIN)       score+=(BUFFER_MIN-gap)*50;
       else if(gap<BUFFER_PREF) score+=(BUFFER_PREF-gap)*2;
@@ -762,7 +767,17 @@ function dispatch(trips,numDrivers){
     // Pick the best driver (lowest score), ignoring any with hard conflict (≥10000)
     const eligibleDrivers=drivers.filter((_,i)=>scores[i]<10000);
     const poolToUse=eligibleDrivers.length>0?eligibleDrivers:drivers; // fallback if all blocked
-    const chosen=poolToUse.reduce((best,d)=>
+    // Will Call orphan leg → prefer the driver carrying this member's outbound
+    // (Rule 3.5: Will Call must stay with the outbound). Fall through if that
+    // driver has a hard conflict.
+    let chosen=null;
+    if(unit.isOrphanLeg && unit.outbound.willCall){
+      const outDriver=drivers.find(d=>d.trips.some(t=>
+        !t.isReturn && t.name===unit.outbound.name
+      ));
+      if(outDriver && scores[drivers.indexOf(outDriver)]<10000) chosen=outDriver;
+    }
+    if(!chosen) chosen=poolToUse.reduce((best,d)=>
       scores[drivers.indexOf(d)]<scores[drivers.indexOf(best)]?d:best, poolToUse[0]);
 
     // Orphan extra leg (3rd+ leg of a multi-leg member): tag for clear UI rendering
@@ -963,6 +978,24 @@ function dispatch(trips,numDrivers){
     }
   }
 
+  // ── Will Call orphan rule (Rule 3.5) ─────────────────────────────────
+  // After balance, any Will Call orphan leg must ride with the driver
+  // who has its member's outbound. The balance pass moves whole pairs
+  // around without seeing orphans, so a WC orphan can get stranded.
+  drivers.forEach(driver=>{
+    const wcOrphans=driver.trips.filter(t=>t.isReturn&&t.willCall&&t.keptRule==="extra");
+    for(const orphan of wcOrphans){
+      const outDriver=drivers.find(d=>d.trips.some(t=>
+        !t.isReturn && t.name===orphan.name
+      ));
+      if(!outDriver||outDriver.id===driver.id) continue;
+      driver.trips=driver.trips.filter(t=>t._key!==orphan._key);
+      driver.cost-=orphan.cost||0;
+      outDriver.trips.push(orphan);
+      outDriver.cost+=orphan.cost||0;
+    }
+  });
+
   // ── Per-driver last outbound rule ─────────────────────────────────────
   // For each driver: find their last outbound of the day.
   // That member's return MUST be done by the same driver — move it if needed.
@@ -1028,9 +1061,10 @@ function dispatch(trips,numDrivers){
         }
         const candidates=[...remaining].filter(i=>{
           const t=blocks[i][0].apptMin??blocks[i][0].startMin??Infinity;
-          return t-earliest<=TIE_WINDOW;
+          // When earliest is Infinity (no remaining block has a time), accept all
+          return earliest===Infinity || t-earliest<=TIE_WINDOW;
         });
-        let bestIdx=candidates[0];
+        let bestIdx=candidates[0]??[...remaining][0];
         if(candidates.length>1&&lastZip){
           let bestDist=Infinity;
           for(const i of candidates){
