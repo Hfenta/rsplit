@@ -17,7 +17,7 @@ Feature inventory of the current `index.html`. Each item is a verifiable behavio
 
 ### 1.1 Fuzzy column resolver
 
-- [x] Match logical fields to actual headers using alias lists (FIRST, LAST, FULLNAME, PHONE, TIME, COST, MILES, TRIPNUM, TRIPTYPE, WILLCALL, PU_ADDR/CITY/ZIP, DL_ADDR/CITY/ZIP, DATE)
+- [x] Match logical fields to actual headers using alias lists (FIRST, LAST, FULLNAME, PHONE, TIME, COST, MILES, TRIPNUM, TRIPTYPE, WILLCALL, WHEELCHAIR, PU_ADDR/CITY/ZIP, DL_ADDR/CITY/ZIP, DATE)
 - [x] 3-pass match: exact → substring contains → loose alias equality (header ≥ 5 chars)
 - [x] Case-insensitive header lookup with fallback getter
 - [x] Treat `Will Call` column as either the time value OR a flag
@@ -28,6 +28,7 @@ Feature inventory of the current `index.html`. Each item is a verifiable behavio
 - [x] Trip Number suffix `A` = outbound, `B`–`Z` = return
 - [x] Fall back to keyword match on type field (`return`, `inbound`, `back`)
 - [x] Detect Will Call from value (`will call`, `w/c`, `wc`, or literal `Time`) OR from `Y` flag column
+- [x] Detect Wheelchair trip from `Y` value in WHEELCHAIR column (aliases: `wheelchair`, `wheel chair`, `wav`, `accessible`, …); flag propagates to both legs of a pair
 
 ### 1.3 Time parsing
 
@@ -113,14 +114,14 @@ Feature inventory of the current `index.html`. Each item is a verifiable behavio
 - [x] ZIP cluster proximity: −60 same cluster, −20 adjacent
 - [x] Same-time conflict on same driver: +10000 (hard block)
 - [x] Timing-gap violation: +10000 (hard block)
-- [x] Availability gap: hard penalty < 30 min, soft penalty 30–60 min
+- [x] Availability gap: hard penalty < 60 min, soft penalty 60–90 min
 
 ### 3.4 Timing rules
 
 - [x] `MIN_OUT_GAP = 60` min between consecutive outbounds on the same driver
 - [x] `MIN_OUT_RET_GAP = 45` min between an outbound and a return of a different member on the same driver
-- [x] `BUFFER_MIN = 30` min minimum free buffer
-- [x] `BUFFER_PREF = 60` min preferred buffer
+- [x] `BUFFER_MIN = 60` min minimum free buffer
+- [x] `BUFFER_PREF = 90` min preferred buffer
 - [x] `MIN_PER_MILE = 3` for drive-time estimate
 
 ### 3.5 Return-leg assignment rules
@@ -129,6 +130,12 @@ Feature inventory of the current `index.html`. Each item is a verifiable behavio
 - [x] Gap ≤ 60 min → same driver keeps both legs (`<Nmin wait>` label)
 - [x] Gap > 60 min and original driver still busy at return time → reassign to least-loaded free driver
 - [x] Otherwise → original driver keeps the return (`<Nmin gap>` label)
+
+### 3.5b Wheelchair routing rule
+
+- [x] Wheelchair trips must be assigned to the driver whose name contains `Ambachew` (case-insensitive); both legs ride together on that driver
+- [x] Wheelchair units are excluded from the post-assignment balance pass (MOVE/SWAP) so they stay locked to Ambachew
+- [x] If no driver is named Ambachew, or Ambachew has a same-time / timing-gap conflict → fall back to normal scoring and surface a `♿ wheelchair warning` badge in the stats bar (tooltip lists each affected trip)
 
 ### 3.6 ZIP cluster map (Charlotte metro)
 
@@ -189,7 +196,7 @@ Feature inventory of the current `index.html`. Each item is a verifiable behavio
 
 ### 4.3 Driver sheets
 
-- [x] Columns: Member, Phone, Leg, Est. Pickup, Appt Time, Miles, Drive Min, Pickup Address, Delivery Address, Cost, Notes
+- [x] Columns: Member, Phone, Leg, Est. Pickup, Appt Time, Miles, Drive Min, Pickup Address, Delivery Address, Cost, Wheelchair, Notes
 - [x] Coloured header row matching the driver card colour
 - [x] Outbound rows: light yellow background (`FFFDE7`)
 - [x] Return rows: white background, italic font, dim text
@@ -228,7 +235,7 @@ Feature inventory of the current `index.html`. Each item is a verifiable behavio
 - [x] MIME `application/msword`, extension `.doc`
 - [x] Title row with totals + generated-date
 - [x] One section per driver with coloured header bar (driver colour)
-- [x] Trip table per driver: Member, Leg, Est. Pickup, Appt Time, Pickup Address, Delivery Address, Cost, Notes
+- [x] Trip table per driver: Member, Leg, Est. Pickup, Appt Time, Pickup Address, Delivery Address, Cost, Wheelchair, Notes
 - [x] Member cell shows name + clickable `tel:` link on next line
 - [x] Address cells are clickable Google Maps links
 - [x] Outbound rows light yellow (`#fffde7`), return rows white

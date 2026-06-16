@@ -73,6 +73,7 @@ h1{font-family:'Space Mono',monospace;font-size:24px;letter-spacing:-.5px}
 .tag-miles{background:#1a1e26;color:var(--dim)}
 .tag-ret{background:#0d2a1e;color:var(--good)}
 .tag-wc{background:#2a1515;color:#ff8b8b}
+.tag-wchair{background:#15202a;color:#7dc8ff}
 .tag-chain{background:#1e2535;color:var(--accent)}
 .tag-reassign{background:#1a1a2e;color:var(--accent2)}
 .tag-last{background:#2a1f0d;color:var(--accent)}
@@ -181,6 +182,7 @@ svg{display:block}
       <span class="tag tag-appt">📅 appt time</span>
       <span class="tag tag-ret">↩ return leg</span>
       <span class="tag tag-wc">📞 will call</span>
+      <span class="tag tag-wchair">♿ wheelchair</span>
       <span class="tag tag-chain">🔗 kept same driver</span>
       <span class="tag tag-reassign">⇄ reassigned</span>
       <span class="tag tag-last">› last of day</span>
@@ -218,8 +220,8 @@ const APP_VERSION="2.0";
 
 const MIN_PER_MILE = 3;
 const SAME_DRV_GAP = 60;
-const BUFFER_MIN   = 30;
-const BUFFER_PREF  = 60;
+const BUFFER_MIN   = 60;
+const BUFFER_PREF  = 90;
 const MIN_OUT_GAP  = 60;  // min minutes between consecutive outbounds on same driver
 const MIN_OUT_RET_GAP = 45; // min minutes between outbound of one member and return of another
 
@@ -328,6 +330,7 @@ const FIELD_ALIASES={
   TRIPNUM: ["trip number","trip #","trip no","tripnum","trip id","booking","confirmation","trip_number"],
   TRIPTYPE:["trip type","triptype","leg type","leg","direction","type"],
   WILLCALL:["will call flag","willcall flag","wc flag"],  // separate flag column (original file)
+  WHEELCHAIR:["wheelchair","wheel chair","wheelchair flag","wheel chair flag","wchair","wheelchair y/n","wav","accessible"],
   PU_ADDR: ["pickup address","pick up address","pickup street","from address","origin address","pu address","pickup addr"],
   PU_CITY: ["pickup city","pick up city","from city","origin city","pu city"],
   PU_ZIP:  ["pickup zip code","pickup zip","pick up zip","from zip","origin zip","pu zip","pickup postal"],
@@ -414,6 +417,7 @@ function parseRows(json){
     // time column itself contains "Will Call" or "Time"
     const wcFlag=safeStr(get(r,"WILLCALL")).toUpperCase()==="Y";
     const willCall=wcFlag||isWillCall(timeRaw)||/^time$/i.test(timeRaw);
+    const wheelchair=safeStr(get(r,"WHEELCHAIR")).toUpperCase()==="Y";
     const apptMin=willCall?null:toMinutes(timeRaw||null);
 
     const miles  =safeNum(get(r,"MILES"));
@@ -440,7 +444,7 @@ function parseRows(json){
     const name=[first,last].filter(Boolean).join(" ")||fullName||addrName||tripNum||"Trip "+(i+1);
 
     return{
-      _key:i, name, phone, timeRaw, willCall,
+      _key:i, name, phone, timeRaw, willCall, wheelchair,
       apptMin, startMin, driveMin, miles,
       tripNum, tripPrefix, legCode, isReturn,
       cost:safeNum(get(r,"COST")),
@@ -521,6 +525,7 @@ function dispatch(trips,numDrivers){
     lastEnd:null, lastZip:null, lastDropZip:null, unitCount:0,
   }));
   const unassigned=[]; // trips that can't be assigned without violating rules
+  const wcWarnings=[]; // wheelchair routing warnings (no Ambachew driver / conflict)
 
   const {pairs, orphans}=pairLegs(trips);
   const returnKeys=new Set(Object.values(pairs).filter(r=>r!=null).map(r=>r._key));
@@ -539,8 +544,9 @@ function dispatch(trips,numDrivers){
       const baseEnd = mustKeepReturn && retAppt!=null ? retAppt
                     : outAppt!=null ? outAppt : (t.startMin??null);
       const freeAfter = baseEnd!=null ? baseEnd + BUFFER_MIN : null;
+      const wheelchair=!!(t.wheelchair || (ret&&ret.wheelchair));
       return {outbound:t, ret, pairFare, outAppt, retAppt, gap,
-              mustKeepReturn, freeAfter,
+              mustKeepReturn, freeAfter, wheelchair,
               pickZip:t.pickZip||"", dropZip:t.dropZip||""};
     })
     .filter(u=>u&&u.outbound); // never include units with undefined outbound
@@ -555,6 +561,7 @@ function dispatch(trips,numDrivers){
       outAppt:appt, retAppt:null, gap:null, mustKeepReturn:false,
       freeAfter: appt!=null ? appt + BUFFER_MIN : null,
       pickZip:t.pickZip||"", dropZip:t.dropZip||"",
+      wheelchair: !!t.wheelchair,
       isOrphanLeg:true,
     };
   }).filter(u=>u&&u.outbound);
@@ -686,6 +693,41 @@ function dispatch(trips,numDrivers){
   // unitCount and lastDropZip initialised in driver creation above
 
   for(const unit of units){
+    // ── Wheelchair → Ambachew override (Rule 3.5b) ─────────────────────────
+    // Wheelchair trips must ride with the driver whose name contains "Ambachew".
+    // If Ambachew exists and is free at this unit's times, assign directly and skip
+    // normal scoring. Otherwise warn and fall through to normal dispatch.
+    if(unit.wheelchair){
+      const amb=drivers.find(d=>/ambachew/i.test(d.name||""));
+      if(amb){
+        const sameTimeConflict=unit.outAppt!=null && amb.trips.some(t=>t.apptMin!=null && t.apptMin===unit.outAppt);
+        if(!sameTimeConflict && !timingViolation(amb,unit)){
+          const outboundExtra = unit.isOrphanLeg
+            ? {chained:false, isReturn:true, keptRule:"extra", keptTag:"extra leg"}
+            : {chained:false};
+          assignTrip(amb, unit.outbound, outboundExtra);
+          if(unit.ret){
+            const ret=unit.ret, gap=unit.gap;
+            let keptRule="kept", keptTag="kept";
+            if(ret.willCall){ keptRule="willcall"; keptTag="will call"; }
+            else if(gap!=null && gap<=SAME_DRV_GAP){
+              const h=Math.floor(gap/60), m=gap%60;
+              keptRule="short"; keptTag=h>0?`${h}h${m>0?m+"m":""} wait`:`${m}min wait`;
+            } else if(gap!=null){
+              const h=Math.floor(gap/60), m=gap%60;
+              keptTag=h>0?`${h}h${m>0?m+"m":""} gap`:`${m}min gap`;
+            }
+            assignTrip(amb, ret, {isReturn:true, keptRule, keptTag});
+          }
+          closeUnit(amb, unit); amb.unitCount++;
+          continue;
+        }
+        wcWarnings.push(`Wheelchair trip "${unit.outbound.name}" — Ambachew has a timing conflict; routed by normal rules.`);
+      } else {
+        wcWarnings.push(`Wheelchair trip "${unit.outbound.name}" — no driver named "Ambachew"; routed by normal rules.`);
+      }
+    }
+
     // Check if ALL drivers have a conflict (score ≥ 10000) for this unit
     const scores=drivers.map(d=>scoreDriver(d,unit));
     const allConflicted=scores.every(s=>s>=10000);
@@ -841,7 +883,7 @@ function dispatch(trips,numDrivers){
   const unassignedKeys=new Set(unassigned.map(t=>t._key));
   function getSwappableUnits(driver){
     const retKeys=new Set(Object.values(pairs).map(r=>r&&r._key).filter(k=>k!=null));
-    const outbounds=driver.trips.filter(t=>t&&!t.isReturn&&!retKeys.has(t._key)&&!unassignedKeys.has(t._key));
+    const outbounds=driver.trips.filter(t=>t&&!t.isReturn&&!retKeys.has(t._key)&&!unassignedKeys.has(t._key)&&!t.wheelchair);
     return outbounds.map(out=>{
       const ret=driver.trips.find(t=>t&&t.isReturn&&pairs[out._key]&&t._key===pairs[out._key]._key)||null;
       return{out,ret,cost:(out.cost||0)+(ret?ret.cost:0)};
@@ -1088,7 +1130,7 @@ function dispatch(trips,numDrivers){
     }
   });
 
-  return {drivers, unassigned};
+  return {drivers, unassigned, wcWarnings};
 }
 
 // ─── UI ───────────────────────────────────────────────────────────────────────
@@ -1171,11 +1213,13 @@ function render(){
   const totalTrips=drivers.reduce((s,d)=>s+d.trips.length,0);
   const target=totalCost/numDrivers;
 
+  const wcWarnings=res.wcWarnings||[];
   $("stats").innerHTML=
     `<span><b>${totalTrips}</b> trips</span>`+
     `<span><b>${money(totalCost)}</b> total</span>`+
     `<span><b>${money(target)}</b> target / driver</span>`+
-    (unassigned.length?`<span style="color:#ff8b8b"><b>${unassigned.length}</b> unassigned ⚠</span>`:"");
+    (unassigned.length?`<span style="color:#ff8b8b"><b>${unassigned.length}</b> unassigned ⚠</span>`:"")+
+    (wcWarnings.length?`<span style="color:#ffaa44" title="${wcWarnings.join('\n').replace(/"/g,'&quot;')}"><b>♿ ${wcWarnings.length}</b> wheelchair warning${wcWarnings.length>1?"s":""}</span>`:"");
 
   $("cards").innerHTML=drivers.map((d,di)=>{
     const c=DCOLORS[di%DCOLORS.length];
@@ -1192,6 +1236,7 @@ function render(){
       if(t.isReturn&&t.keptRule==="reassigned")tags+=`<span class="tag tag-reassign">⇄ reassigned</span>`;
       else if(t.isReturn)tags+=`<span class="tag tag-ret">↩ return · ${t.keptTag||""}</span>`;
       if(t.willCall)tags+=`<span class="tag tag-wc">📞 will call</span>`;
+      if(t.wheelchair)tags+=`<span class="tag tag-wchair">♿ wheelchair</span>`;
       if(t.forcedLast)tags+=`<span class="tag tag-last">› last of day</span>`;
       return`<div class="trip">
         <div class="trow"><span class="tname">${t.name}</span><span class="tcost">${money(t.cost)}</span></div>
@@ -1233,6 +1278,7 @@ function render(){
           ${t.miles?`<span class="tag tag-miles">${t.miles}mi · ${t.driveMin}min</span>`:""}
           ${t.isReturn?`<span class="tag tag-ret">↩ return</span>`:""}
           ${t.willCall?`<span class="tag tag-wc">📞 will call</span>`:""}
+          ${t.wheelchair?`<span class="tag tag-wchair">♿ wheelchair</span>`:""}
           <span class="tag" style="background:#2a1515;color:#ff8b8b">⚠ ${t.unassignedReason||"unassigned"}</span>
         </div>
         ${t.pickFull?`<div class="addr"><span class="alabel">From</span>${addrLink(t.pickFull)}</div>`:""}
@@ -1351,6 +1397,7 @@ $("export-word").addEventListener("click",()=>{
         <td style="background:${bgColor};padding:5px 8px;border:1px solid #ccc;font-size:10pt">${wordGpsLink(t.pickFull)}</td>
         <td style="background:${bgColor};padding:5px 8px;border:1px solid #ccc;font-size:10pt">${wordGpsLink(t.dropFull)}</td>
         <td style="background:${bgColor};padding:5px 8px;border:1px solid #ccc;font-size:10pt;text-align:right">${money(t.cost)}</td>
+        <td style="background:${bgColor};padding:5px 8px;border:1px solid #ccc;font-size:10pt;text-align:center;font-weight:bold;color:${t.wheelchair?'#1a5fbb':'#ccc'}">${t.wheelchair?'♿ Y':''}</td>
         <td style="background:${bgColor};padding:5px 8px;border:1px solid #ccc;font-size:10pt;color:#666">${notes}</td>
       </tr>`;
     }).join("");
@@ -1366,7 +1413,7 @@ $("export-word").addEventListener("click",()=>{
       <table style="border-collapse:collapse;width:100%;font-family:Arial,sans-serif;margin-bottom:20pt">
         <thead>
           <tr>
-            ${['Member','Leg','Est. Pickup','Appt Time','Pickup Address','Delivery Address','Cost','Notes']
+            ${['Member','Leg','Est. Pickup','Appt Time','Pickup Address','Delivery Address','Cost','Wheelchair','Notes']
               .map(h=>`<th style="background:#${hex};color:#fff;padding:6px 8px;border:1px solid #999;font-size:10pt;text-align:left;white-space:nowrap">${h}</th>`).join('')}
           </tr>
         </thead>
@@ -1375,6 +1422,7 @@ $("export-word").addEventListener("click",()=>{
           <tr>
             <td colspan="6" style="padding:5px 8px;border:1px solid #ccc;font-weight:bold;font-size:10pt;background:#${lightHex}">TOTAL</td>
             <td style="padding:5px 8px;border:1px solid #ccc;font-weight:bold;font-size:10pt;text-align:right;background:#${lightHex}">${money(d.cost)}</td>
+            <td style="background:#${lightHex};border:1px solid #ccc"></td>
             <td style="background:#${lightHex};border:1px solid #ccc"></td>
           </tr>
         </tfoot>
@@ -1427,7 +1475,7 @@ $("export-word").addEventListener("click",()=>{
   </p>
   <table style="border-collapse:collapse;width:100%;font-family:Arial,sans-serif;margin-bottom:20pt">
     <thead>
-      <tr>${['Member','Leg','Est. Pickup','Appt Time','Pickup Address','Delivery Address','Cost','Reason'].map(h=>`<th style="background:#cc2222;color:#fff;padding:6px 8px;border:1px solid #999;font-size:10pt;text-align:left;white-space:nowrap">${h}</th>`).join('')}</tr>
+      <tr>${['Member','Leg','Est. Pickup','Appt Time','Pickup Address','Delivery Address','Cost','Wheelchair','Reason'].map(h=>`<th style="background:#cc2222;color:#fff;padding:6px 8px;border:1px solid #999;font-size:10pt;text-align:left;white-space:nowrap">${h}</th>`).join('')}</tr>
     </thead>
     <tbody>
       ${wUnassigned.map(t=>{
@@ -1444,6 +1492,7 @@ $("export-word").addEventListener("click",()=>{
           <td style="background:${bg};padding:5px 8px;border:1px solid #ccc;font-size:10pt">${wordGpsLink(t.pickFull)}</td>
           <td style="background:${bg};padding:5px 8px;border:1px solid #ccc;font-size:10pt">${wordGpsLink(t.dropFull)}</td>
           <td style="background:${bg};padding:5px 8px;border:1px solid #ccc;font-size:10pt;text-align:right">${money(t.cost||0)}</td>
+          <td style="background:${bg};padding:5px 8px;border:1px solid #ccc;font-size:10pt;text-align:center;font-weight:bold;color:${t.wheelchair?'#1a5fbb':'#ccc'}">${t.wheelchair?'♿ Y':''}</td>
           <td style="background:${bg};padding:5px 8px;border:1px solid #ccc;font-size:10pt;color:#880000">${t.unassignedReason||'Unassigned'}</td>
         </tr>`;
       }).join('')}
@@ -1641,7 +1690,7 @@ $("export").addEventListener("click",()=>{
   sheets.push({name:'Summary',rows:sumRows,cols:[16,8,13,13,11]});
 
   // ── Driver sheets ──────────────────────────────────────────────────────────
-  const hdrs=['Member','Phone','Leg','Est. Pickup','Appt Time','Miles','Drive Min','Pickup Address','Delivery Address','Cost','Notes'];
+  const hdrs=['Member','Phone','Leg','Est. Pickup','Appt Time','Miles','Drive Min','Pickup Address','Delivery Address','Cost','Wheelchair','Notes'];
   const fmtPhone=p=>{if(!p)return'';const d=String(p).replace(/\D/g,'');return d.length===10?`(${d.slice(0,3)}) ${d.slice(3,6)}-${d.slice(6)}`:(d||'');};
 
   lastDrivers.forEach((d,di)=>{
@@ -1672,13 +1721,14 @@ $("export").addEventListener("click",()=>{
         {v:t.pickFull||'',s:ls,t:'s',f:pickFormula},
         {v:t.dropFull||'',s:ls,t:'s',f:dropFormula},
         {v:t.cost||0,s:ds,t:'n'},
+        {v:t.wheelchair?'Y':'',s:ds,t:'s'},
         {v:notes,s:ds,t:'s'},
       ]);
     });
     // Total row
     const totStyle=sTotal(hex);
     rows.push(hdrs.map((_,ci)=>({v:ci===0?'TOTAL':ci===9?d.cost:'',s:totStyle,t:ci===9?'n':'s'})));
-    sheets.push({name:d.name.slice(0,31),rows,cols:[24,16,12,12,12,7,9,42,42,9,24]});
+    sheets.push({name:d.name.slice(0,31),rows,cols:[24,16,12,12,12,7,9,42,42,9,11,24]});
   });
 
   // ── Unassigned sheet ───────────────────────────────────────────────────────
@@ -1688,7 +1738,7 @@ $("export").addEventListener("click",()=>{
     const uDsB =()=>{const fi=getFillIdx('FFFFE0E0');const fo=getFontIdx(true, false,10,'FF550000',false);return getXfIdx(fi,fo,1,true,null,'center');};
     const uLink=()=>{const fi=getFillIdx('FFFFE0E0');const fo=getFontIdx(false,false,10,'FF1A5FBB',true); return getXfIdx(fi,fo,1,true,null,'center');};
     const uTot =()=>{const fi=getFillIdx('FFFF9999');const fo=getFontIdx(true, false,11,'FF550000',false);return getXfIdx(fi,fo,2,false,null,'center');};
-    const uHdrs=['Member','Phone','Leg','Est. Pickup','Appt Time','Miles','Drive Min','Pickup Address','Delivery Address','Cost','Reason'];
+    const uHdrs=['Member','Phone','Leg','Est. Pickup','Appt Time','Miles','Drive Min','Pickup Address','Delivery Address','Cost','Wheelchair','Reason'];
     const uRows=[[...uHdrs.map(h=>({v:h,s:uHdrStyle,t:'s'}))]];
     lastUnassigned.forEach(t=>{
       const isRet=!!t.isReturn;
@@ -1709,13 +1759,14 @@ $("export").addEventListener("click",()=>{
         {v:t.pickFull||'', s:uLink(),t:'s',f:pickFormula},
         {v:t.dropFull||'', s:uLink(),t:'s',f:dropFormula},
         {v:t.cost||0,      s:uDs(),t:'n'},
+        {v:t.wheelchair?'Y':'',s:uDs(),t:'s'},
         {v:t.unassignedReason||'Unassigned',s:uDs(),t:'s'},
       ]);
     });
     const uTotal=lastUnassigned.reduce((s,t)=>s+(t.cost||0),0);
     uRows.push(uHdrs.map((_,ci)=>({v:ci===0?'TOTAL':ci===9?uTotal:'',s:uTot(),t:ci===9?'n':'s'})));
     // Sheet name must be ≤31 chars, no special chars: use plain "Unassigned"
-    sheets.push({name:'Unassigned',rows:uRows,cols:[24,16,12,12,12,7,9,42,42,9,36]});
+    sheets.push({name:'Unassigned',rows:uRows,cols:[24,16,12,12,12,7,9,42,42,9,11,36]});
   }
   const stylesXml=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
