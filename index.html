@@ -314,6 +314,11 @@ function joinAddr(street,city,zip){
   return [street,cz].filter(Boolean).join(", ");
 }
 function isWillCall(v){return/will\s*call|w\/c|\bwc\b/i.test(String(v||""));}
+function isWheelchair(v){
+  const s=String(v==null?"":v).trim().toUpperCase();
+  if(!s||s==="N"||s==="NO"||s==="FALSE"||s==="0")return false;
+  return s==="Y"||s==="YES"||s==="TRUE"||s==="1"||s==="X"||s==="W"||/wheel|wchair|wav|access/.test(s);
+}
 
 // ─── Fuzzy column resolver ────────────────────────────────────────────────────
 // Finds the best matching column for each logical field by trying multiple
@@ -417,7 +422,7 @@ function parseRows(json){
     // time column itself contains "Will Call" or "Time"
     const wcFlag=safeStr(get(r,"WILLCALL")).toUpperCase()==="Y";
     const willCall=wcFlag||isWillCall(timeRaw)||/^time$/i.test(timeRaw);
-    const wheelchair=safeStr(get(r,"WHEELCHAIR")).toUpperCase()==="Y";
+    const wheelchair=isWheelchair(get(r,"WHEELCHAIR"));
     const apptMin=willCall?null:toMinutes(timeRaw||null);
 
     const miles  =safeNum(get(r,"MILES"));
@@ -545,6 +550,7 @@ function dispatch(trips,numDrivers){
                     : outAppt!=null ? outAppt : (t.startMin??null);
       const freeAfter = baseEnd!=null ? baseEnd + BUFFER_MIN : null;
       const wheelchair=!!(t.wheelchair || (ret&&ret.wheelchair));
+      if(wheelchair){ t.wheelchair=true; if(ret) ret.wheelchair=true; }
       return {outbound:t, ret, pairFare, outAppt, retAppt, gap,
               mustKeepReturn, freeAfter, wheelchair,
               pickZip:t.pickZip||"", dropZip:t.dropZip||""};
@@ -1397,7 +1403,7 @@ $("export-word").addEventListener("click",()=>{
         <td style="background:${bgColor};padding:5px 8px;border:1px solid #ccc;font-size:10pt">${wordGpsLink(t.pickFull)}</td>
         <td style="background:${bgColor};padding:5px 8px;border:1px solid #ccc;font-size:10pt">${wordGpsLink(t.dropFull)}</td>
         <td style="background:${bgColor};padding:5px 8px;border:1px solid #ccc;font-size:10pt;text-align:right">${money(t.cost)}</td>
-        <td style="background:${bgColor};padding:5px 8px;border:1px solid #ccc;font-size:10pt;text-align:center;font-weight:bold;color:${t.wheelchair?'#1a5fbb':'#ccc'}">${t.wheelchair?'♿ Y':''}</td>
+        <td style="background:${bgColor};padding:5px 8px;border:1px solid #ccc;font-size:10pt;text-align:center;font-weight:bold;color:${t.wheelchair?'#1a5fbb':'#999'}">${t.wheelchair?'♿ Y':'N'}</td>
         <td style="background:${bgColor};padding:5px 8px;border:1px solid #ccc;font-size:10pt;color:#666">${notes}</td>
       </tr>`;
     }).join("");
@@ -1492,7 +1498,7 @@ $("export-word").addEventListener("click",()=>{
           <td style="background:${bg};padding:5px 8px;border:1px solid #ccc;font-size:10pt">${wordGpsLink(t.pickFull)}</td>
           <td style="background:${bg};padding:5px 8px;border:1px solid #ccc;font-size:10pt">${wordGpsLink(t.dropFull)}</td>
           <td style="background:${bg};padding:5px 8px;border:1px solid #ccc;font-size:10pt;text-align:right">${money(t.cost||0)}</td>
-          <td style="background:${bg};padding:5px 8px;border:1px solid #ccc;font-size:10pt;text-align:center;font-weight:bold;color:${t.wheelchair?'#1a5fbb':'#ccc'}">${t.wheelchair?'♿ Y':''}</td>
+          <td style="background:${bg};padding:5px 8px;border:1px solid #ccc;font-size:10pt;text-align:center;font-weight:bold;color:${t.wheelchair?'#1a5fbb':'#999'}">${t.wheelchair?'♿ Y':'N'}</td>
           <td style="background:${bg};padding:5px 8px;border:1px solid #ccc;font-size:10pt;color:#880000">${t.unassignedReason||'Unassigned'}</td>
         </tr>`;
       }).join('')}
@@ -1721,7 +1727,7 @@ $("export").addEventListener("click",()=>{
         {v:t.pickFull||'',s:ls,t:'s',f:pickFormula},
         {v:t.dropFull||'',s:ls,t:'s',f:dropFormula},
         {v:t.cost||0,s:ds,t:'n'},
-        {v:t.wheelchair?'Y':'',s:ds,t:'s'},
+        {v:t.wheelchair?'Y':'N',s:ds,t:'s'},
         {v:notes,s:ds,t:'s'},
       ]);
     });
@@ -1759,7 +1765,7 @@ $("export").addEventListener("click",()=>{
         {v:t.pickFull||'', s:uLink(),t:'s',f:pickFormula},
         {v:t.dropFull||'', s:uLink(),t:'s',f:dropFormula},
         {v:t.cost||0,      s:uDs(),t:'n'},
-        {v:t.wheelchair?'Y':'',s:uDs(),t:'s'},
+        {v:t.wheelchair?'Y':'N',s:uDs(),t:'s'},
         {v:t.unassignedReason||'Unassigned',s:uDs(),t:'s'},
       ]);
     });
