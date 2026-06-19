@@ -316,8 +316,8 @@ function joinAddr(street,city,zip){
 function isWillCall(v){return/will\s*call|w\/c|\bwc\b/i.test(String(v||""));}
 function isWheelchair(v){
   const s=String(v==null?"":v).trim().toUpperCase();
-  if(!s||s==="N"||s==="NO"||s==="FALSE"||s==="0")return false;
-  return s==="Y"||s==="YES"||s==="TRUE"||s==="1"||s==="X"||s==="W"||/wheel|wchair|wav|access/.test(s);
+  if(!s||s==="N"||s==="NO"||s==="FALSE"||s==="0"||s==="A"||/^AMB/.test(s))return false;
+  return s==="Y"||s==="YES"||s==="TRUE"||s==="1"||s==="X"||s==="W"||/WHEEL|WCHAIR|WAV|ACCESS|MOBILITY/.test(s);
 }
 
 // ─── Fuzzy column resolver ────────────────────────────────────────────────────
@@ -335,7 +335,7 @@ const FIELD_ALIASES={
   TRIPNUM: ["trip number","trip #","trip no","tripnum","trip id","booking","confirmation","trip_number"],
   TRIPTYPE:["trip type","triptype","leg type","leg","direction","type"],
   WILLCALL:["will call flag","willcall flag","wc flag"],  // separate flag column (original file)
-  WHEELCHAIR:["wheelchair","wheel chair","wheelchair flag","wheel chair flag","wchair","wheelchair y/n","wav","accessible"],
+  WHEELCHAIR:["passenger type","pax type","patient type","service type","level of service","los","wheelchair","wheel chair","wheelchair flag","wheel chair flag","wchair","wheelchair y/n","wav","accessible","mobility"],
   PU_ADDR: ["pickup address","pick up address","pickup street","from address","origin address","pu address","pickup addr"],
   PU_CITY: ["pickup city","pick up city","from city","origin city","pu city"],
   PU_ZIP:  ["pickup zip code","pickup zip","pick up zip","from zip","origin zip","pu zip","pickup postal"],
@@ -1392,8 +1392,9 @@ $("export-word").addEventListener("click",()=>{
       // GPS clickable links for Word
       function wordGpsLink(addr){
         if(!addr)return"—";
-        const url="https://www.google.com/maps/dir/?api=1&destination="+encodeURIComponent(addr);
-        return`<a href="${url}" style="color:#1a5fbb;text-decoration:underline">${addr}</a>`;
+        const url=("https://www.google.com/maps/dir/?api=1&destination="+encodeURIComponent(addr)).replace(/&/g,'&amp;');
+        const safe=String(addr).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        return`<a href="${url}" style="color:#1a5fbb;text-decoration:underline">${safe}</a>`;
       }
       return`<tr>
         <td style="background:${bgColor};padding:5px 8px;border:1px solid #ccc;font-size:10pt">${memberName}</td>
@@ -1489,7 +1490,7 @@ $("export-word").addEventListener("click",()=>{
         const apptTime=t.willCall?"Will Call":fmtTime(t.apptMin);
         const leg=t.isReturn?"↩ Return":"→ Outbound";
         const bg='#ffe0e0';
-        function wordGpsLink(addr){if(!addr)return"—";const url="https://www.google.com/maps/dir/?api=1&destination="+encodeURIComponent(addr);return`<a href="${url}" style="color:#1a5fbb;text-decoration:underline">${addr}</a>`;}
+        function wordGpsLink(addr){if(!addr)return"—";const url=("https://www.google.com/maps/dir/?api=1&destination="+encodeURIComponent(addr)).replace(/&/g,'&amp;');const safe=String(addr).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');return`<a href="${url}" style="color:#1a5fbb;text-decoration:underline">${safe}</a>`;}
         return`<tr>
           <td style="background:${bg};padding:5px 8px;border:1px solid #ccc;font-size:10pt;font-weight:bold">${t.name}</td>
           <td style="background:${bg};padding:5px 8px;border:1px solid #ccc;font-size:10pt;white-space:nowrap">${leg}</td>
@@ -1713,19 +1714,19 @@ $("export").addEventListener("click",()=>{
       const apptTime=t.willCall?"Will Call":fmtTime(t.apptMin);
       const rawPhone=t.phone?String(t.phone).replace(/\D/g,''):'';
       const notes=[t.keptTag,t.forcedLast?"last of day":"",t.willCall?"Will Call":""].filter(Boolean).join("; ");
-      const phoneFormula=rawPhone?`HYPERLINK("tel:${rawPhone}","${fmtPhone(rawPhone)}")`:null;
-      const pickFormula=t.pickFull?`HYPERLINK("https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(t.pickFull).replace(/"/g,'""')}","${t.pickFull.replace(/"/g,'""')}")`:null;
-      const dropFormula=t.dropFull?`HYPERLINK("https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(t.dropFull).replace(/"/g,'""')}","${t.dropFull.replace(/"/g,'""')}")`:null;
+      const phoneUrl=rawPhone?`tel:${rawPhone}`:null;
+      const pickUrl=t.pickFull?`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(t.pickFull)}`:null;
+      const dropUrl=t.dropFull?`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(t.dropFull)}`:null;
       rows.push([
         {v:t.name,s:dsB,t:'s'},
-        {v:fmtPhone(rawPhone),s:ls,t:'s',f:phoneFormula},
+        {v:fmtPhone(rawPhone),s:ls,t:'s',url:phoneUrl},
         {v:isRet?"↩ Return":"→ Outbound",s:ds,t:'s'},
         {v:pickTime,s:ds,t:'s'},
         {v:apptTime,s:ds,t:'s'},
         {v:t.miles||0,s:ds,t:'n'},
         {v:t.driveMin||0,s:ds,t:'n'},
-        {v:t.pickFull||'',s:ls,t:'s',f:pickFormula},
-        {v:t.dropFull||'',s:ls,t:'s',f:dropFormula},
+        {v:t.pickFull||'',s:ls,t:'s',url:pickUrl},
+        {v:t.dropFull||'',s:ls,t:'s',url:dropUrl},
         {v:t.cost||0,s:ds,t:'n'},
         {v:t.wheelchair?'Y':'N',s:ds,t:'s'},
         {v:notes,s:ds,t:'s'},
@@ -1751,19 +1752,19 @@ $("export").addEventListener("click",()=>{
       const pickTime=t.willCall?"Will Call":fmtTime(t.startMin);
       const apptTime=t.willCall?"Will Call":fmtTime(t.apptMin);
       const rawPhone=t.phone?String(t.phone).replace(/\D/g,''):'';
-      const phoneFormula=rawPhone?`HYPERLINK("tel:${rawPhone}","${fmtPhone(rawPhone)}")`:null;
-      const pickFormula=t.pickFull?`HYPERLINK("https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(t.pickFull).replace(/"/g,'""')}","${t.pickFull.replace(/"/g,'""')}")`:null;
-      const dropFormula=t.dropFull?`HYPERLINK("https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(t.dropFull).replace(/"/g,'""')}","${t.dropFull.replace(/"/g,'""')}")`:null;
+      const phoneUrl=rawPhone?`tel:${rawPhone}`:null;
+      const pickUrl=t.pickFull?`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(t.pickFull)}`:null;
+      const dropUrl=t.dropFull?`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(t.dropFull)}`:null;
       uRows.push([
         {v:t.name,         s:uDsB(),t:'s'},
-        {v:fmtPhone(rawPhone),s:uLink(),t:'s',f:phoneFormula},
+        {v:fmtPhone(rawPhone),s:uLink(),t:'s',url:phoneUrl},
         {v:isRet?"Return":"Outbound",s:uDs(),t:'s'},
         {v:pickTime,       s:uDs(),t:'s'},
         {v:apptTime,       s:uDs(),t:'s'},
         {v:t.miles||0,     s:uDs(),t:'n'},
         {v:t.driveMin||0,  s:uDs(),t:'n'},
-        {v:t.pickFull||'', s:uLink(),t:'s',f:pickFormula},
-        {v:t.dropFull||'', s:uLink(),t:'s',f:dropFormula},
+        {v:t.pickFull||'', s:uLink(),t:'s',url:pickUrl},
+        {v:t.dropFull||'', s:uLink(),t:'s',url:dropUrl},
         {v:t.cost||0,      s:uDs(),t:'n'},
         {v:t.wheelchair?'Y':'N',s:uDs(),t:'s'},
         {v:t.unassignedReason||'Unassigned',s:uDs(),t:'s'},
@@ -1786,13 +1787,16 @@ $("export").addEventListener("click",()=>{
   // ── Build sheet XML (using global shared strings) ───────────────────────────
   // Convert rows to XML, building global shared strings
   function rowsToXml(rows){
-    return rows.map((row,ri)=>{
+    const hyperlinks=[];
+    const body=rows.map((row,ri)=>{
       const cells=row.map((cell,ci)=>{
         if(!cell)return'';
         const ref=cellRef(ri,ci);
         const sx=` s="${cell.s||0}"`;
-        if(cell.f){
-          return`<c r="${ref}"${sx} t="str"><f>${esc(cell.f)}</f><v></v></c>`;
+        if(cell.url){
+          hyperlinks.push({ref,url:cell.url});
+          const si=globalSS(cell.v||'');
+          return`<c r="${ref}"${sx} t="s"><v>${si}</v></c>`;
         } else if(cell.t==='n'){
           const nv=isNaN(Number(cell.v))?0:Number(cell.v);
           return`<c r="${ref}"${sx}><v>${nv}</v></c>`;
@@ -1803,14 +1807,17 @@ $("export").addEventListener("click",()=>{
       }).join('');
       return`<row r="${ri+1}">${cells}</row>`;
     }).join('');
+    return{body,hyperlinks};
   }
 
   const sheetXmls=sheets.map(sh=>{
-    const rowsXml=rowsToXml(sh.rows);
-    const lastRow=sh.rows.length;
-    const lastCol=sh.rows.reduce((m,r)=>Math.max(m,r.length),0);
+    const {body,hyperlinks}=rowsToXml(sh.rows);
     const colsXml=sh.cols.map((w,i)=>`<col min="${i+1}" max="${i+1}" width="${w}" customWidth="1"/>`).join('');
-    return`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cols>${colsXml}</cols><sheetData>${rowsXml}</sheetData></worksheet>`;
+    const hasLinks=hyperlinks.length>0;
+    const xmlnsR=hasLinks?' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"':'';
+    const hlXml=hasLinks?`<hyperlinks>${hyperlinks.map((h,i)=>`<hyperlink ref="${h.ref}" r:id="rId${i+1}"/>`).join('')}</hyperlinks>`:'';
+    const xml=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"${xmlnsR}><cols>${colsXml}</cols><sheetData>${body}</sheetData>${hlXml}</worksheet>`;
+    return{xml,hyperlinks};
   });
 
   const ssXml=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="${allSS.length}" uniqueCount="${allSS.length}">${allSS.map(s=>`<si><t>${esc(s)}</t></si>`).join('')}</sst>`;
@@ -1927,6 +1934,12 @@ $("export").addEventListener("click",()=>{
   const ctXml=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>${contentTypes}</Types>`;
   const relsXml=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`;
 
+  const sheetRelsFiles=sheetXmls.map((s,i)=>{
+    if(!s.hyperlinks.length)return null;
+    const rels=s.hyperlinks.map((h,j)=>`<Relationship Id="rId${j+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="${esc(h.url)}" TargetMode="External"/>`).join('');
+    return [`xl/worksheets/_rels/sheet${i+1}.xml.rels`,`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${rels}</Relationships>`];
+  }).filter(Boolean);
+
   const files=[
     ['[Content_Types].xml',ctXml],
     ['_rels/.rels',relsXml],
@@ -1934,7 +1947,8 @@ $("export").addEventListener("click",()=>{
     ['xl/_rels/workbook.xml.rels',wbRelsXml],
     ['xl/styles.xml',stylesXml],
     ['xl/sharedStrings.xml',ssXml],
-    ...sheetXmls.map((xml,i)=>[`xl/worksheets/sheet${i+1}.xml`,xml]),
+    ...sheetXmls.map((s,i)=>[`xl/worksheets/sheet${i+1}.xml`,s.xml]),
+    ...sheetRelsFiles,
   ];
 
   buildZip(files).then(buf=>{
