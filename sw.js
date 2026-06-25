@@ -1,4 +1,4 @@
-const CACHE='rs-v2.0';
+const CACHE='rs-v2.1';
 const ASSETS=[
   './','./index.html','./manifest.json',
   './icons/icon-192.png','./icons/icon-512.png',
