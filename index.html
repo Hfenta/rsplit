@@ -78,6 +78,7 @@ h1{font-family:'Space Mono',monospace;font-size:24px;letter-spacing:-.5px}
 .tag-reassign{background:#1a1a2e;color:var(--accent2)}
 .tag-last{background:#2a1f0d;color:var(--accent)}
 .tag-warn{background:#2a1515;color:#ffaa44}
+.tag-trip{background:#1a1e26;color:var(--dim);font-family:ui-monospace,monospace;letter-spacing:.3px}
 .addr{font-size:12px;color:var(--dim);margin-top:4px;line-height:1.5}
 .alabel{display:inline-block;min-width:30px;font-size:10px;font-weight:700;
   text-transform:uppercase;letter-spacing:.4px;color:#555c6a;margin-right:4px}
@@ -1236,6 +1237,7 @@ function render(){
       const apptTime=t.willCall?"Will Call":(t.apptMin!=null?fmtTime(t.apptMin):"—");
       // tags
       let tags="";
+      if(t.tripNum)tags+=`<span class="tag tag-trip">🎫 ${t.tripNum}</span>`;
       tags+=`<span class="tag tag-time">🕒 ${pickTime}</span>`;
       tags+=`<span class="tag tag-appt">📅 ${apptTime}</span>`;
       if(t.miles)tags+=`<span class="tag tag-miles">${t.miles}mi · ${t.driveMin}min</span>`;
@@ -1279,6 +1281,7 @@ function render(){
       return`<div class="trip" style="border-left:3px solid #ff8b8b">
         <div class="trow"><span class="tname">${t.name}</span><span class="tcost">${money(t.cost)}</span></div>
         <div class="meta">
+          ${t.tripNum?`<span class="tag tag-trip">🎫 ${t.tripNum}</span>`:""}
           <span class="tag tag-time">🕒 ${pickTime}</span>
           <span class="tag tag-appt">📅 ${apptTime}</span>
           ${t.miles?`<span class="tag tag-miles">${t.miles}mi · ${t.driveMin}min</span>`:""}
@@ -1397,6 +1400,7 @@ $("export-word").addEventListener("click",()=>{
         return`<a href="${url}" style="color:#1a5fbb;text-decoration:underline">${safe}</a>`;
       }
       return`<tr>
+        <td style="background:${bgColor};padding:5px 8px;border:1px solid #ccc;font-size:9pt;font-family:Consolas,monospace;white-space:nowrap">${t.tripNum||''}</td>
         <td style="background:${bgColor};padding:5px 8px;border:1px solid #ccc;font-size:10pt">${memberName}</td>
         <td style="background:${bgColor};padding:5px 8px;border:1px solid #ccc;font-size:10pt;white-space:nowrap">${leg}</td>
         <td style="background:${bgColor};padding:5px 8px;border:1px solid #ccc;font-size:10pt;white-space:nowrap">${pickTime}</td>
@@ -1420,14 +1424,14 @@ $("export-word").addEventListener("click",()=>{
       <table style="border-collapse:collapse;width:100%;font-family:Arial,sans-serif;margin-bottom:20pt">
         <thead>
           <tr>
-            ${['Member','Leg','Est. Pickup','Appt Time','Pickup Address','Delivery Address','Cost','Wheelchair','Notes']
+            ${['Trip #','Member','Leg','Est. Pickup','Appt Time','Pickup Address','Delivery Address','Cost','Wheelchair','Notes']
               .map(h=>`<th style="background:#${hex};color:#fff;padding:6px 8px;border:1px solid #999;font-size:10pt;text-align:left;white-space:nowrap">${h}</th>`).join('')}
           </tr>
         </thead>
         <tbody>${rows}</tbody>
         <tfoot>
           <tr>
-            <td colspan="6" style="padding:5px 8px;border:1px solid #ccc;font-weight:bold;font-size:10pt;background:#${lightHex}">TOTAL</td>
+            <td colspan="7" style="padding:5px 8px;border:1px solid #ccc;font-weight:bold;font-size:10pt;background:#${lightHex}">TOTAL</td>
             <td style="padding:5px 8px;border:1px solid #ccc;font-weight:bold;font-size:10pt;text-align:right;background:#${lightHex}">${money(d.cost)}</td>
             <td style="background:#${lightHex};border:1px solid #ccc"></td>
             <td style="background:#${lightHex};border:1px solid #ccc"></td>
@@ -1482,7 +1486,7 @@ $("export-word").addEventListener("click",()=>{
   </p>
   <table style="border-collapse:collapse;width:100%;font-family:Arial,sans-serif;margin-bottom:20pt">
     <thead>
-      <tr>${['Member','Leg','Est. Pickup','Appt Time','Pickup Address','Delivery Address','Cost','Wheelchair','Reason'].map(h=>`<th style="background:#cc2222;color:#fff;padding:6px 8px;border:1px solid #999;font-size:10pt;text-align:left;white-space:nowrap">${h}</th>`).join('')}</tr>
+      <tr>${['Trip #','Member','Leg','Est. Pickup','Appt Time','Pickup Address','Delivery Address','Cost','Wheelchair','Reason'].map(h=>`<th style="background:#cc2222;color:#fff;padding:6px 8px;border:1px solid #999;font-size:10pt;text-align:left;white-space:nowrap">${h}</th>`).join('')}</tr>
     </thead>
     <tbody>
       ${wUnassigned.map(t=>{
@@ -1492,6 +1496,7 @@ $("export-word").addEventListener("click",()=>{
         const bg='#ffe0e0';
         function wordGpsLink(addr){if(!addr)return"—";const url=("https://www.google.com/maps/dir/?api=1&destination="+encodeURIComponent(addr)).replace(/&/g,'&amp;');const safe=String(addr).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');return`<a href="${url}" style="color:#1a5fbb;text-decoration:underline">${safe}</a>`;}
         return`<tr>
+          <td style="background:${bg};padding:5px 8px;border:1px solid #ccc;font-size:9pt;font-family:Consolas,monospace;white-space:nowrap">${t.tripNum||''}</td>
           <td style="background:${bg};padding:5px 8px;border:1px solid #ccc;font-size:10pt;font-weight:bold">${t.name}</td>
           <td style="background:${bg};padding:5px 8px;border:1px solid #ccc;font-size:10pt;white-space:nowrap">${leg}</td>
           <td style="background:${bg};padding:5px 8px;border:1px solid #ccc;font-size:10pt;white-space:nowrap">${pickTime}</td>
@@ -1697,7 +1702,7 @@ $("export").addEventListener("click",()=>{
   sheets.push({name:'Summary',rows:sumRows,cols:[16,8,13,13,11]});
 
   // ── Driver sheets ──────────────────────────────────────────────────────────
-  const hdrs=['Member','Phone','Leg','Est. Pickup','Appt Time','Miles','Drive Min','Pickup Address','Delivery Address','Cost','Wheelchair','Notes'];
+  const hdrs=['Trip #','Member','Phone','Leg','Est. Pickup','Appt Time','Miles','Drive Min','Pickup Address','Delivery Address','Cost','Wheelchair','Notes'];
   const fmtPhone=p=>{if(!p)return'';const d=String(p).replace(/\D/g,'');return d.length===10?`(${d.slice(0,3)}) ${d.slice(3,6)}-${d.slice(6)}`:(d||'');};
 
   lastDrivers.forEach((d,di)=>{
@@ -1718,6 +1723,7 @@ $("export").addEventListener("click",()=>{
       const pickUrl=t.pickFull?`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(t.pickFull)}`:null;
       const dropUrl=t.dropFull?`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(t.dropFull)}`:null;
       rows.push([
+        {v:t.tripNum||'',s:ds,t:'s'},
         {v:t.name,s:dsB,t:'s'},
         {v:fmtPhone(rawPhone),s:ls,t:'s',url:phoneUrl},
         {v:isRet?"↩ Return":"→ Outbound",s:ds,t:'s'},
@@ -1734,8 +1740,8 @@ $("export").addEventListener("click",()=>{
     });
     // Total row
     const totStyle=sTotal(hex);
-    rows.push(hdrs.map((_,ci)=>({v:ci===0?'TOTAL':ci===9?d.cost:'',s:totStyle,t:ci===9?'n':'s'})));
-    sheets.push({name:d.name.slice(0,31),rows,cols:[24,16,12,12,12,7,9,42,42,9,11,24]});
+    rows.push(hdrs.map((_,ci)=>({v:ci===0?'TOTAL':ci===10?d.cost:'',s:totStyle,t:ci===10?'n':'s'})));
+    sheets.push({name:d.name.slice(0,31),rows,cols:[12,24,16,12,12,12,7,9,42,42,9,11,24]});
   });
 
   // ── Unassigned sheet ───────────────────────────────────────────────────────
@@ -1745,7 +1751,7 @@ $("export").addEventListener("click",()=>{
     const uDsB =()=>{const fi=getFillIdx('FFFFE0E0');const fo=getFontIdx(true, false,10,'FF550000',false);return getXfIdx(fi,fo,1,true,null,'center');};
     const uLink=()=>{const fi=getFillIdx('FFFFE0E0');const fo=getFontIdx(false,false,10,'FF1A5FBB',true); return getXfIdx(fi,fo,1,true,null,'center');};
     const uTot =()=>{const fi=getFillIdx('FFFF9999');const fo=getFontIdx(true, false,11,'FF550000',false);return getXfIdx(fi,fo,2,false,null,'center');};
-    const uHdrs=['Member','Phone','Leg','Est. Pickup','Appt Time','Miles','Drive Min','Pickup Address','Delivery Address','Cost','Wheelchair','Reason'];
+    const uHdrs=['Trip #','Member','Phone','Leg','Est. Pickup','Appt Time','Miles','Drive Min','Pickup Address','Delivery Address','Cost','Wheelchair','Reason'];
     const uRows=[[...uHdrs.map(h=>({v:h,s:uHdrStyle,t:'s'}))]];
     lastUnassigned.forEach(t=>{
       const isRet=!!t.isReturn;
@@ -1756,6 +1762,7 @@ $("export").addEventListener("click",()=>{
       const pickUrl=t.pickFull?`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(t.pickFull)}`:null;
       const dropUrl=t.dropFull?`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(t.dropFull)}`:null;
       uRows.push([
+        {v:t.tripNum||'',  s:uDs(),t:'s'},
         {v:t.name,         s:uDsB(),t:'s'},
         {v:fmtPhone(rawPhone),s:uLink(),t:'s',url:phoneUrl},
         {v:isRet?"Return":"Outbound",s:uDs(),t:'s'},
@@ -1771,9 +1778,9 @@ $("export").addEventListener("click",()=>{
       ]);
     });
     const uTotal=lastUnassigned.reduce((s,t)=>s+(t.cost||0),0);
-    uRows.push(uHdrs.map((_,ci)=>({v:ci===0?'TOTAL':ci===9?uTotal:'',s:uTot(),t:ci===9?'n':'s'})));
+    uRows.push(uHdrs.map((_,ci)=>({v:ci===0?'TOTAL':ci===10?uTotal:'',s:uTot(),t:ci===10?'n':'s'})));
     // Sheet name must be ≤31 chars, no special chars: use plain "Unassigned"
-    sheets.push({name:'Unassigned',rows:uRows,cols:[24,16,12,12,12,7,9,42,42,9,11,36]});
+    sheets.push({name:'Unassigned',rows:uRows,cols:[12,24,16,12,12,12,7,9,42,42,9,11,36]});
   }
   const stylesXml=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
